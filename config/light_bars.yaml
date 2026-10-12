@@ -1,0 +1,34 @@
+# OpenCV HSV：H=0..179，S/V=0..255。红色横跨色相首尾。
+# 起始参数适合 640x480；现场按真实灯条、曝光、白平衡调整。
+min_saturation: 80
+min_value: 160
+red_hue_low_max: 12
+red_hue_high_min: 168
+blue_hue_min: 90
+blue_hue_max: 135
+min_area: 12.0          # 轮廓面积，像素平方
+min_length: 8.0         # 长边，像素
+min_aspect: 2.0         # 长边/短边
+max_aspect: 30.0
+max_tilt_deg: 40.0      # 长轴偏离图像竖直方向的最大角度
+min_fill: 0.45          # 轮廓面积/最小外接矩形面积
+brightness_color: true # V 亮度轮廓 + 内部 HSV 颜色投票；false 回到原 HSV 掩膜
+min_color_fraction: 0.08 # 亮轮廓内至少 8% 的像素有红/蓝颜色，白芯可保留
+min_color_dominance: 0.75 # 有色像素中主色占比，拒绝红蓝混杂候选
+pair_min_ratio: 0.8     # 两灯条中心距/平均灯条长度
+pair_max_ratio: 5.0
+pair_max_length_ratio: 1.5
+pair_max_y_offset: 0.5  # 两中心纵向差/平均长度
+pair_max_angle_deg: 15
+pair_max_rectangular_error_deg: 25 # 灯条轴线与中心连线偏离垂直的角度
+pair_min_score: 0.25    # 几何评分，不是数字分类置信度
+pose_max_error_px: 3.0  # 平均重投影误差同时受绝对值和相对灯条长度限制
+pose_max_error_ratio: 0.1
+# 小装甲灯条模型，与 sp_vision_25 solver 相同。中心距是两根灯条中心线的距离。
+armor_width_m: 0.135
+lightbar_length_m: 0.056
+# 填入这台 USB 相机自己的标定后才会显示 yaw/pitch。不要抄海康相机的 camera_matrix。
+# camera_width: 640
+# camera_height: 480
+# camera_matrix: [fx, 0, cx, 0, fy, cy, 0, 0, 1]
+# distort_coeffs: [0, 0, 0, 0, 0]

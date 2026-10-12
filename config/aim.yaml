@@ -1,0 +1,33 @@
+# 类别固定为 0=target_red，1=target_blue，需与模型一致。
+class_ids: [0, 1]
+# 检测置信度下限，范围 (0,1]。
+confidence_min: 0.6
+# 原图检测框宽和高的最小值，单位像素。
+min_box_px: 6.0
+# 有效轴向深度下限，单位米；不是无人机安全距离。
+depth_min_m: 0.25
+# 有效轴向深度上限，单位米；须按实测深度质量调整。
+depth_max_m: 3.0
+# 取检测框中心 40% 的宽和高作为测距区域，即约 16% 面积。
+depth_roi_fraction: 0.4
+# ROI 中至少 60% 像素具有范围内的有限深度。
+depth_min_valid_ratio: 0.6
+# 除了占比，还要求至少 9 个有效深度样本。
+depth_min_samples: 9
+# 深度 MAD 上限（米）；也是主层筛选容差的下限。
+depth_max_mad_m: 0.04
+# 采集到处理入口的最大年龄（秒），包含推理耗时。
+max_frame_age_s: 0.20
+# 彩色与深度采集时间的最大差值（秒）。
+max_sync_error_s: 0.03
+# 同类检测框关联所需的最小交并比。
+lock_iou_min: 0.20
+# 最后看到目标后保留关联的时间（秒）；丢失期间仍输出无效。
+lock_hold_s: 0.35
+# 需要连续合格的帧数；失效会重新开始确认。
+confirm_frames: 3
+# 横纵像素误差均不超过此值时标记对准；不代表允许接触。
+aligned_tolerance_px: 8.0
+# No fabricated extrinsic calibration: optical coordinates only until supplied.
+# 相机到机体的 4×4 刚体标定矩阵，平移用米；未知保持 null。
+body_T_camera: null

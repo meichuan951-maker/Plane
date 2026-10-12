@@ -1,0 +1,22 @@
+# Astra Pro 当前灯条严重过曝，降低颜色饱和度门限，保留亮度、形状和颜色占比检查。
+# 数值基于本次真实帧，不改其它相机的 light_bars.yaml。
+min_saturation: 20
+min_value: 160
+min_area: 12.0
+min_length: 8.0
+min_aspect: 2.0
+max_aspect: 30.0
+max_tilt_deg: 40.0
+min_fill: 0.45
+brightness_color: true
+min_color_fraction: 0.08
+min_color_dominance: 0.75
+pair_min_ratio: 0.8
+pair_max_ratio: 5.0
+pair_max_length_ratio: 1.5
+pair_max_y_offset: 0.5
+pair_max_angle_deg: 15.0
+pair_max_rectangular_error_deg: 25.0
+pair_min_score: 0.25
+pose_max_error_px: 3.0
+pose_max_error_ratio: 0.1

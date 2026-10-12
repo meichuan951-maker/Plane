@@ -1,0 +1,17 @@
+# 已确认拓扑：MicoVIO -> PX4 EKF2 -> 此串口 -> Orange Pi。
+# 本配置仅针对 PX4 与香橙派之间的链路，MicoVIO 另接飞控的其他接口。
+device: /dev/ttyS?  # 必须替换为实际接口；占位符会被拒绝
+baud: 921600       # 此端与 PX4 的对应 MAVLink 实例保持一致
+system_id: 1
+component_id: 1
+own_system_id: 42
+own_component_id: 191
+# 确认运行固件的 ODOMETRY 与文档描述一致后设 true；不凭宣传图推断。
+px4_odometry_contract_confirmed: false
+timesync_enabled: true  # 唯一发送消息为 TIMESYNC，无飞行控制或参数写入
+max_pose_age_s: 0.2
+estimator_timeout_s: 0.5
+heartbeat_timeout_s: 1.0
+# 以下是软件拒绝阈值，非 MicoVIO 实测精度或接触精度保证。
+max_position_std_m: 0.5
+max_angle_std_rad: 0.35
