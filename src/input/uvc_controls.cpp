@@ -57,6 +57,24 @@ bool CameraControls::openDevice(const std::string &path) {
   has_gain = query(V4L2_CID_GAIN, gain_min, gain_max, gain_value);
   return has_exposure || has_focus || has_gain;
 }
+void CameraControls::applyPreviewDefaults() {
+  // YLR4K 切到手动快门后几帧就会全黑，预览必须停在自动曝光。
+  useAutoExposure();
+  if (has_gain)
+    setGain(std::min(8, gain_max));
+  // 数字锐度只能加重已有边缘。这颗镜头的 focus_absolute 从 0 到 289
+  // 画面几乎不变，光学模糊要靠镜头环或把目标放到最近对焦距离之外。
+  int sharp_min = 0, sharp_max = 0, sharp = 0;
+  if (query(V4L2_CID_SHARPNESS, sharp_min, sharp_max, sharp)) {
+    const int target = std::clamp(80, sharp_min, sharp_max);
+    if (!set(V4L2_CID_SHARPNESS, target))
+      std::cerr << "Warning: camera rejected sharpness\n";
+  }
+  if (has_auto_focus)
+    setAutoFocus(true);
+  std::cerr << "Preview defaults: auto exposure, gain " << gain_value
+            << ", sharpness 80, focus " << focus_status << '\n';
+}
 void CameraControls::useAutoExposure() {
   if (has_exposure && !set(V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_AUTO))
     std::cerr << "Warning: camera rejected auto exposure\n";
@@ -79,16 +97,6 @@ bool CameraControls::setAutoFocus(bool enabled) {
   }
   focus_status = enabled ? "auto" : "manual";
   return true;
-}
-void CameraControls::keepAutoExposure() {
-  // 短手动快门会把 YLR4K 打成全黑，实时画面停在自动曝光上。
-  useAutoExposure();
-  setAutoFocus(false);
-  if (has_gain) {
-    gain_value = std::clamp(8, gain_min, gain_max);
-    if (!set(V4L2_CID_GAIN, gain_value))
-      std::cerr << "Warning: camera rejected gain\n";
-  }
 }
 bool CameraControls::pulseLongestShutter() {
   // 冷启动时自动曝光会停在全黑。写一次最长快门后再切回自动，亮度才能稳住。

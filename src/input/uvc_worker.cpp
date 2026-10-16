@@ -40,11 +40,11 @@ int cameraWorkerMain(int argc, char **argv) {
   if (argc != 8)
     return 2;
   struct stat info {};
-  if (fstat(198, &info) ||
+  if (fstat(aim::kStreamSharedFd, &info) ||
       info.st_size < static_cast<off_t>(sizeof(StreamShared)))
     return 2;
-  void *mapping =
-      mmap(nullptr, info.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, 198, 0);
+  void *mapping = mmap(nullptr, info.st_size, PROT_READ | PROT_WRITE,
+                       MAP_SHARED, aim::kStreamSharedFd, 0);
   if (mapping == MAP_FAILED)
     return 2;
   auto *shared = static_cast<StreamShared *>(mapping);
@@ -86,9 +86,10 @@ int cameraWorkerMain(int argc, char **argv) {
     cv::Mat raw;
     while (true) {
       StreamCommand command{};
-      // 控制是按需触发；默认启动不写曝光、对焦或增益，不扫描焦点。
-      for (int i = 0; i < 16 && ::read(199, &command, sizeof(command)) ==
-                                    static_cast<ssize_t>(sizeof(command));
+      // 滑块和按键按需下发。启动时只写一次预览默认值，不扫描焦点。
+      for (int i = 0;
+           i < 16 && ::read(aim::kStreamCommandFd, &command, sizeof(command)) ==
+                         static_cast<ssize_t>(sizeof(command));
            ++i) {
         bool ok = false;
         switch (static_cast<CameraCommand>(command.kind)) {
@@ -138,7 +139,7 @@ int cameraWorkerMain(int argc, char **argv) {
       shared->frame_type = CV_8UC3;
       shared->frame_time = streamTime();
       ++shared->sequence;
-      shared->stage = 1;
+      shared->stage = aim::kStreamLive;
       std::snprintf(shared->message, sizeof(shared->message), "%s",
                     description.c_str());
       publishControls(shared, controls);
@@ -147,12 +148,14 @@ int cameraWorkerMain(int argc, char **argv) {
       if (!controls_checked) {
         if (!controls.openDevice(argv[2]))
           std::cerr << "Warning: camera controls unavailable\n";
+        else
+          controls.applyPreviewDefaults();
         controls_checked = true;
       }
     }
   } catch (const std::exception &error) {
     lockShared(shared);
-    shared->stage = 2;
+    shared->stage = aim::kStreamFailed;
     std::snprintf(shared->message, sizeof(shared->message), "%s", error.what());
     pthread_mutex_unlock(&shared->mutex);
     // 不在这里等待失效驱动清理；设备句柄由子进程结束回收。

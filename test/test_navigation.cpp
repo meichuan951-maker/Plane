@@ -226,6 +226,37 @@ int main() {
     p.epoch = 2;
     check(!aim::poseInMap(p, calibration()).valid, "expired self alignment");
   });
+  run("map transform rejects malformed pose metadata and optional velocity", [] {
+    const std::vector<std::function<void(aim::PoseSample &)>> corrupt = {
+        [](auto &p) { p.capture_s = -.1; },
+        [](auto &p) { p.received_s = p.capture_s - .1; },
+        [](auto &p) { p.received_s = INFINITY; },
+        [](auto &p) { p.time_error_s = NAN; },
+        [](auto &p) { p.time_error_s = -.1; },
+        [](auto &p) { p.time_domain.clear(); },
+        [](auto &p) { p.velocity_odom_mps = cv::Vec3d{NAN, 0, 0}; }};
+    for (const auto &change : corrupt) {
+      auto p = pose(1);
+      change(p);
+      const auto mapped = aim::poseInMap(p, calibration());
+      check(!mapped.valid && mapped.reason == "invalid_pose",
+            "malformed source became valid map pose");
+    }
+    auto p = pose(1);
+    auto c = calibration();
+    p.epoch = c.epoch = 0;
+    check(!aim::poseInMap(p, c).valid, "uninitialized epoch became valid");
+  });
+  run("pose integrity does not override consumer clock error limits", [] {
+    auto p = pose(1);
+    p.time_error_s = .02;
+    check(aim::poseInMap(p, calibration()).valid,
+          "coordinate transform imposed clock quality policy");
+    aim::PoseHistory strict;
+    check(!strict.push(p), "default history ignored clock error limit");
+    aim::PoseHistory tolerant({256, 2, .1, .03});
+    check(tolerant.push(p), "configured history limit not respected");
+  });
   run("mission waits for localization and metric target", [] {
     MissionFixture f;
     aim::MissionMachine m(f.c);
@@ -278,6 +309,67 @@ int main() {
     check(m.step(f.i).action == "hold", "no pursuit stale target");
     f.advance(1.8, {0, 0, 1});
     check(m.step(f.i).phase == aim::MissionPhase::Recover, "recovery timeout");
+  });
+  run("mission aborts when an airborne task lands unexpectedly", [] {
+    for (bool contact : {false, true}) {
+      MissionFixture f;
+      aim::MissionMachine m(f.c);
+      f.approach(m);
+      if (contact) {
+        f.advance(1.3, {3, 0, 1});
+        f.target(1.3);
+        f.i.contact_authorized = f.i.contact_region_verified = true;
+        check(m.step(f.i).phase == aim::MissionPhase::Contact, "contact");
+      }
+      f.advance(1.4, {1, 0, 0});
+      f.target(1.4);
+      f.i.landed = true;
+      const auto r = m.step(f.i);
+      check(r.phase == aim::MissionPhase::Abort &&
+                r.reason == "unexpected_landing" && !r.waypoint_map_m,
+            "landed task still planned motion/contact");
+      f.advance(1.5, {1, 0, 0});
+      f.i.landed = false;
+      check(m.step(f.i).phase == aim::MissionPhase::Abort,
+            "unexpected landing did not latch");
+    }
+  });
+  run("mission rejects malformed optional velocity", [] {
+    MissionFixture f;
+    aim::MissionMachine m(f.c);
+    f.approach(m);
+    f.advance(1.3, {0, 0, 1});
+    f.target(1.3);
+    f.i.vehicle_map.velocity_odom_mps = cv::Vec3d{INFINITY, 0, 0};
+    const auto r = m.step(f.i);
+    check(r.phase == aim::MissionPhase::Abort &&
+              r.reason == "localization_unavailable",
+          "mission accepted malformed map pose");
+  });
+  run("takeoff landing after liftoff aborts until explicit reset", [] {
+    MissionFixture f;
+    aim::MissionMachine m(f.c);
+    check(m.step(f.i).phase == aim::MissionPhase::Takeoff, "takeoff");
+    f.advance(1.1, {0, 0, 0});
+    check(m.step(f.i).phase == aim::MissionPhase::Takeoff,
+          "normal waiting for liftoff rejected");
+    f.advance(1.2, {0, 0, .4});
+    f.i.landed = false;
+    check(m.step(f.i).phase == aim::MissionPhase::Takeoff, "climbing");
+    f.advance(1.3, {0, 0, 0});
+    f.i.landed = true;
+    const auto r = m.step(f.i);
+    check(r.phase == aim::MissionPhase::Abort &&
+              r.reason == "unexpected_landing" && !r.waypoint_map_m,
+          "landing during climb retried takeoff");
+    f.advance(1.4, {0, 0, 0});
+    check(m.step(f.i).phase == aim::MissionPhase::Abort, "abort latch");
+    m.reset();
+    f.advance(1.5, {0, 0, 0});
+    check(m.step(f.i).phase == aim::MissionPhase::Takeoff, "restart after reset");
+    f.advance(1.6, {0, 0, 0});
+    check(m.step(f.i).phase == aim::MissionPhase::Takeoff,
+          "reset retained previous airborne state");
   });
   run("mission resets and manual override latch abort", [] {
     MissionFixture f;

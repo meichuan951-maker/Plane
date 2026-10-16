@@ -16,6 +16,21 @@ extern char **environ;
 
 namespace aim {
 namespace {
+struct ScopedFd {
+  int value;
+  explicit ScopedFd(int descriptor) : value(descriptor) {}
+  ScopedFd(const ScopedFd &) = delete;
+  ScopedFd &operator=(const ScopedFd &) = delete;
+  ~ScopedFd() {
+    if (value >= 0)
+      ::close(value);
+  }
+  int release() {
+    const int result = value;
+    value = -1;
+    return result;
+  }
+};
 // 单向控制使用管道，不需要网络能力。对端退出时不能让 SIGPIPE 结束预览。
 ssize_t writeCommand(int fd, const StreamCommand &command) {
   sigset_t blocked, previous, pending;
@@ -47,7 +62,7 @@ CameraStream::CameraStream(StreamOptions options, std::string executable)
   // 为协商到略大于请求尺寸的设备留余量，最大空间取决于用户请求。
   const std::size_t capacity = std::max<std::size_t>(
       1920 * 1080 * 3, std::size_t(options_.width) * options_.height *
-                         CV_ELEM_SIZE(options_.frame_type));
+                           CV_ELEM_SIZE(options_.frame_type));
   mapping_size_ = sizeof(StreamShared) + capacity;
   shared_fd_ = memfd_create("camera-frame", MFD_CLOEXEC);
   if (shared_fd_ < 0 || ftruncate(shared_fd_, mapping_size_) != 0) {
@@ -114,8 +129,8 @@ void CameraStream::stop() {
   stopped_ = true;
   if (worker_ > 0 && options_.graceful_stop_ms) {
     kill(worker_, SIGTERM);
-    const auto deadline = Clock::now() +
-                          std::chrono::milliseconds(options_.graceful_stop_ms);
+    const auto deadline =
+        Clock::now() + std::chrono::milliseconds(options_.graceful_stop_ms);
     while (Clock::now() < deadline) {
       if (waitpid(worker_, nullptr, WNOHANG) == worker_) {
         worker_ = -1;
@@ -143,20 +158,13 @@ bool CameraStream::start() {
     return false;
   shared_->sequence = shared_->acknowledged = 0;
   shared_->frame_time = 0;
-  shared_->width = shared_->height = shared_->stage = 0;
+  shared_->width = shared_->height = 0;
+  shared_->stage = kStreamStarting;
   shared_->frame_type = options_.frame_type;
   shared_->controls = {};
   shared_->message[0] = '\0';
   pthread_mutex_unlock(&shared_->mutex);
   sequence_ = acknowledged_ = 0;
-  int channel[2];
-  if (pipe2(channel, O_NONBLOCK | O_CLOEXEC))
-    throw std::runtime_error("Could not create camera control channel");
-  // posix_spawn/exec 使用全新的 OpenCV 运行时，避免对已初始化 GUI/线程池 fork。
-  posix_spawn_file_actions_t actions;
-  posix_spawn_file_actions_init(&actions);
-  posix_spawn_file_actions_adddup2(&actions, shared_fd_, 198);
-  posix_spawn_file_actions_adddup2(&actions, channel[0], 199);
   std::vector<std::string> args{executable_,
                                 "--camera-worker",
                                 options_.device,
@@ -169,17 +177,41 @@ bool CameraStream::start() {
   for (auto &arg : args)
     argv.push_back(arg.data());
   argv.push_back(nullptr);
-  const int error = posix_spawn(&worker_, executable_.c_str(), &actions,
-                                nullptr, argv.data(), environ);
-  posix_spawn_file_actions_destroy(&actions);
-  ::close(channel[0]);
+  int channel[2];
+  if (pipe2(channel, O_NONBLOCK | O_CLOEXEC))
+    throw std::runtime_error("Could not create camera control channel");
+  ScopedFd channel_read{channel[0]}, channel_write{channel[1]};
+  // 源描述符也可能恰好为 198/199。先复制到协议目标范围之外，
+  // 避免前一个 dup2 覆盖下一个动作还需要的控制管道。
+  ScopedFd spawn_shared{
+      fcntl(shared_fd_, F_DUPFD_CLOEXEC, aim::kStreamCommandFd + 1)};
+  if (spawn_shared.value < 0)
+    throw std::runtime_error("Could not duplicate camera shared descriptor");
+  ScopedFd spawn_command{
+      fcntl(channel_read.value, F_DUPFD_CLOEXEC, aim::kStreamCommandFd + 1)};
+  if (spawn_command.value < 0)
+    throw std::runtime_error("Could not duplicate camera control descriptor");
+  // posix_spawn/exec 使用全新的 OpenCV 运行时，避免对已初始化 GUI/线程池 fork。
+  posix_spawn_file_actions_t actions;
+  int error = posix_spawn_file_actions_init(&actions);
+  const bool actions_ready = error == 0;
+  if (!error)
+    error = posix_spawn_file_actions_adddup2(
+        &actions, spawn_shared.value, aim::kStreamSharedFd);
+  if (!error)
+    error = posix_spawn_file_actions_adddup2(
+        &actions, spawn_command.value, aim::kStreamCommandFd);
+  if (!error)
+    error = posix_spawn(&worker_, executable_.c_str(), &actions, nullptr,
+                        argv.data(), environ);
+  if (actions_ready)
+    posix_spawn_file_actions_destroy(&actions);
   if (error) {
-    ::close(channel[1]);
     worker_ = -1;
     throw std::runtime_error("Could not start camera worker: " +
                              std::string(std::strerror(error)));
   }
-  control_fd_ = channel[1];
+  control_fd_ = channel_write.release();
   ++generation_;
   activity_ = Clock::now();
   message_ = "Starting camera";
@@ -255,10 +287,9 @@ CameraStream::Result CameraStream::poll(cv::Mat &frame,
     if (shared_->message[0])
       message_ = shared_->message;
     bool fresh = false;
-    if (stage == 1 && shared_->sequence != sequence_ &&
+    if (stage == aim::kStreamLive && shared_->sequence != sequence_ &&
         streamTime() - shared_->frame_time <= 0.25 && shared_->width > 0 &&
-        shared_->height > 0 &&
-        shared_->frame_type == options_.frame_type &&
+        shared_->height > 0 && shared_->frame_type == options_.frame_type &&
         std::uint64_t(shared_->width) * shared_->height *
                 CV_ELEM_SIZE(options_.frame_type) <=
             shared_->capacity) {
@@ -275,7 +306,7 @@ CameraStream::Result CameraStream::poll(cv::Mat &frame,
       fresh = true;
     }
     pthread_mutex_unlock(&shared_->mutex);
-    if (stage == 2) {
+    if (stage == aim::kStreamFailed) {
       recover(message_);
       return Result::Recovering;
     }

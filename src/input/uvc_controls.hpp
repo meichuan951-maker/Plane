@@ -15,7 +15,8 @@ struct CameraControls {
   CameraControls(const CameraControls &) = delete;
   CameraControls &operator=(const CameraControls &) = delete;
   bool openDevice(const std::string &path);
-  void keepAutoExposure();
+  // 预览启动时写一次：自动曝光、增益、数字锐度、连续对焦。
+  void applyPreviewDefaults();
   bool pulseLongestShutter();
   void useAutoExposure();
   bool setAutoFocus(bool enabled);

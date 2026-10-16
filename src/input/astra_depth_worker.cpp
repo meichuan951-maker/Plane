@@ -36,10 +36,12 @@ struct Context {
 int astraDepthWorkerMain() {
   struct stat info {};
   constexpr std::size_t bytes = 640 * 480 * sizeof(cv::Vec3f);
-  if (fstat(198, &info) || info.st_size < off_t(sizeof(StreamShared) + bytes))
+  if (fstat(aim::kStreamSharedFd, &info) ||
+      info.st_size < off_t(sizeof(StreamShared) + bytes))
     return 2;
   auto *shared = static_cast<StreamShared *>(
-      mmap(nullptr, info.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, 198, 0));
+      mmap(nullptr, info.st_size, PROT_READ | PROT_WRITE, MAP_SHARED,
+           aim::kStreamSharedFd, 0));
   if (shared == MAP_FAILED)
     return 2;
   prctl(PR_SET_PDEATHSIG, SIGKILL);
@@ -141,7 +143,7 @@ int astraDepthWorkerMain() {
       shared->height = 480;
       shared->frame_type = CV_32FC3;
       shared->frame_time = stamp;
-      shared->stage = 1;
+      shared->stage = aim::kStreamLive;
       ++shared->sequence;
       std::snprintf(shared->message, sizeof(shared->message),
                     "Astra Pro 640x480 raw depth; SDK projection unverified");
@@ -152,7 +154,7 @@ int astraDepthWorkerMain() {
     device.close();
   } catch (const std::exception &e) {
     lock(shared);
-    shared->stage = 2;
+    shared->stage = aim::kStreamFailed;
     std::snprintf(shared->message, sizeof(shared->message), "%s", e.what());
     pthread_mutex_unlock(&shared->mutex);
     munmap(shared, info.st_size);

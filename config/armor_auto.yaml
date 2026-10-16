@@ -1,5 +1,5 @@
-# 用户颜色协议：1=蓝色，2=红色。这里默认选择当前摆放的红色装甲板。
-target_color: 2
+# 用户颜色协议：1=蓝色，2=红色。当前摆放的是蓝色 4 号靶；这里只按灯条颜色识别。
+target_color: 1
 camera:
   device: /dev/v4l/by-id/usb-Astra_Pro_HD_Camera_Astra_Pro_HD_Camera-video-index0
   width: 640

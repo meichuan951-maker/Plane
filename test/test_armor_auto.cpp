@@ -21,8 +21,10 @@ aim::ArmorCandidate candidate(int color, float x, float y) {
 }
 int main(int argc, char **argv) {
   try {
+    check(argc == 2, "Usage: aim_armor_auto_tests CONFIG.yaml");
     auto c = aim::ArmorAutoConfig::load(argv[1]);
-    check(c.target_color == 2, "red default protocol wrong");
+    check(c.target_color == 1 || c.target_color == 2, "invalid color protocol");
+    c.target_color = 2; // 跟踪用例固定测红色，不依赖用户现场选色。
     c.detector.has_camera = false;
     c.calibrated = false;
     aim::ArmorTracker t(c);

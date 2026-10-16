@@ -38,7 +38,7 @@ void Config::validate() const {
       throw std::invalid_argument("Limits must be finite and positive");
   if (depth_max_m <= depth_min_m || depth_min_samples < 1 || confirm_frames < 1)
     throw std::invalid_argument("Invalid depth range or confirmation count");
-// 验证齐次矩阵末行、旋转正交性及 det(R)=+1，拒绝缩放或镜像矩阵。
+  // 验证齐次矩阵末行、旋转正交性及 det(R)=+1，拒绝缩放或镜像矩阵。
   if (body_T_camera) {
     const auto &t = *body_T_camera;
     for (double v : t.val)
@@ -119,7 +119,7 @@ DepthEstimate estimateDepth(const cv::Mat &depth, const Box &b,
   DepthEstimate out;
   if (depth.type() != CV_32FC1)
     throw std::invalid_argument("Depth must be CV_32FC1 metres");
-// 按宽高比例取中心区域，并将像素索引裁到图像边界。
+  // 按宽高比例取中心区域，并将像素索引裁到图像边界。
   const auto center = b.center();
   const double hw = (b.x2 - b.x1) * c.depth_roi_fraction / 2,
                hh = (b.y2 - b.y1) * c.depth_roi_fraction / 2;
@@ -140,7 +140,7 @@ DepthEstimate estimateDepth(const cv::Mat &depth, const Box &b,
       if (std::isfinite(v) && v >= c.depth_min_m && v <= c.depth_max_m)
         values.push_back(v);
     }
-// 先排除缺失、非有限和超范围深度；样本数量及占比都必须合格。
+  // 先排除缺失、非有限和超范围深度；样本数量及占比都必须合格。
   out.valid_ratio =
       static_cast<double>(values.size()) / ((x2 - x1) * (y2 - y1));
   if (values.size() < static_cast<std::size_t>(c.depth_min_samples) ||
@@ -148,7 +148,7 @@ DepthEstimate estimateDepth(const cv::Mat &depth, const Box &b,
     out.reason = "insufficient_depth";
     return out;
   }
-// 中位数抗少量离群值；MAD 反映样本的离散程度。
+  // 中位数抗少量离群值；MAD 反映样本的离散程度。
   const double z = median(values);
   std::vector<double> deviations;
   for (double v : values)
@@ -158,7 +158,7 @@ DepthEstimate estimateDepth(const cv::Mat &depth, const Box &b,
     out.reason = "inconsistent_depth";
     return out;
   }
-// MAD 很小时使用绝对容差下限；若不足 80% 样本属于主层，视为前后景混合。
+  // MAD 很小时使用绝对容差下限；若不足 80% 样本属于主层，视为前后景混合。
   std::vector<double> inliers;
   for (double v : values)
     if (std::abs(v - z) <= std::max(3 * (*out.mad), c.depth_max_mad_m))
@@ -197,42 +197,55 @@ Solution Pipeline::process(const Frame &f,
   s.frame_id = f.frame_id;
   s.time_domain = f.time_domain;
   s.received_s = f.received_s;
-  s.image_width = f.color_bgr.cols; s.image_height = f.color_bgr.rows;
-  auto reject = [&](const std::string &reason, bool reset=false) {
+  s.image_width = f.color_bgr.cols;
+  s.image_height = f.color_bgr.rows;
+  auto reject = [&](const std::string &reason, bool reset = false) {
     s.reason = s.position_reason = reason;
     consecutive_ = detection_consecutive_ = 0;
-    if (reset) resetLock();
-    if (target_) { s.track_id = track_id_; s.tracking_state = "lost"; }
+    if (reset)
+      resetLock();
+    if (target_) {
+      s.track_id = track_id_;
+      s.tracking_state = "lost";
+    }
     return s;
   };
   // 来源/时钟/尺寸改变时，不继承旧锁定和确认计数。
-  if (f.time_domain!=time_domain_ || f.source!=source_ ||
-      f.frame_id!=frame_id_ || f.color_bgr.size()!=image_size_) {
-    resetLock(); last_capture_.reset();
-    time_domain_=f.time_domain; source_=f.source;
-    frame_id_=f.frame_id; image_size_=f.color_bgr.size();
+  if (f.time_domain != time_domain_ || f.source != source_ ||
+      f.frame_id != frame_id_ || f.color_bgr.size() != image_size_) {
+    resetLock();
+    last_capture_.reset();
+    time_domain_ = f.time_domain;
+    source_ = f.source;
+    frame_id_ = f.frame_id;
+    image_size_ = f.color_bgr.size();
   }
-  if (f.time_domain!="host_monotonic" && f.time_domain!="replay_monotonic")
-    return reject("unsupported_time_domain",true);
-  if (!f.clock_valid) return reject("camera_clock_unsynchronized",true);
-  if (now<f.capture_s || now-f.capture_s>config_.max_frame_age_s)
-    return reject("stale_or_future_frame",true);
-  if (f.received_s && (!finite({*f.received_s}) || *f.received_s<f.capture_s || *f.received_s>now))
-    return reject("invalid_receive_time",true);
-  if (last_capture_ && f.capture_s<=*last_capture_)
-    return reject("non_monotonic_frame",true);
-  last_capture_=f.capture_s;
-  if (f.color_bgr.empty() || f.color_bgr.type()!=CV_8UC3)
-    return reject("invalid_color_image",true);
-  bool calibrated=false;
+  if (f.time_domain != "host_monotonic" && f.time_domain != "replay_monotonic")
+    return reject("unsupported_time_domain", true);
+  if (!f.clock_valid)
+    return reject("camera_clock_unsynchronized", true);
+  if (now < f.capture_s || now - f.capture_s > config_.max_frame_age_s)
+    return reject("stale_or_future_frame", true);
+  if (f.received_s && (!finite({*f.received_s}) ||
+                       *f.received_s < f.capture_s || *f.received_s > now))
+    return reject("invalid_receive_time", true);
+  if (last_capture_ && f.capture_s <= *last_capture_)
+    return reject("non_monotonic_frame", true);
+  last_capture_ = f.capture_s;
+  if (f.color_bgr.empty() || f.color_bgr.type() != CV_8UC3)
+    return reject("invalid_color_image", true);
+  bool calibrated = false;
   try {
     f.intrinsics.validate();
-    calibrated=cv::Size(f.intrinsics.width,f.intrinsics.height)==f.color_bgr.size();
-  } catch (const std::invalid_argument &) {}
-  const auto &k=f.intrinsics;
-  const cv::Point2d reference=calibrated ? cv::Point2d(k.cx,k.cy) :
-      cv::Point2d(f.color_bgr.cols/2.,f.color_bgr.rows/2.);
-// 过滤类别、置信度、尺寸及越界框；不靠裁框把不完整目标变成有效目标。
+    calibrated =
+        cv::Size(f.intrinsics.width, f.intrinsics.height) == f.color_bgr.size();
+  } catch (const std::invalid_argument &) {
+  }
+  const auto &k = f.intrinsics;
+  const cv::Point2d reference =
+      calibrated ? cv::Point2d(k.cx, k.cy)
+                 : cv::Point2d(f.color_bgr.cols / 2., f.color_bgr.rows / 2.);
+  // 过滤类别、置信度、尺寸及越界框；不靠裁框把不完整目标变成有效目标。
   std::vector<Detection> candidates;
   for (const auto &d : detections) {
     const auto &b = d.box;
@@ -240,16 +253,17 @@ Solution Pipeline::process(const Frame &f,
         d.confidence < config_.confidence_min || d.confidence > 1 ||
         std::find(config_.class_ids.begin(), config_.class_ids.end(),
                   d.class_id) == config_.class_ids.end() ||
-        b.x1 < 0 || b.y1 < 0 || b.x2 > f.color_bgr.cols || b.y2 > f.color_bgr.rows ||
-        b.x2 - b.x1 < config_.min_box_px || b.y2 - b.y1 < config_.min_box_px)
+        b.x1 < 0 || b.y1 < 0 || b.x2 > f.color_bgr.cols ||
+        b.y2 > f.color_bgr.rows || b.x2 - b.x1 < config_.min_box_px ||
+        b.y2 - b.y1 < config_.min_box_px)
       continue;
     candidates.push_back(d);
   }
-// 等待窗口到期后才允许重新选择目标；窗口内丢失则返回无效观测。
+  // 等待窗口到期后才允许重新选择目标；窗口内丢失则返回无效观测。
   if (last_seen_ && f.capture_s - *last_seen_ > config_.lock_hold_s)
     resetLock();
   std::optional<Detection> chosen;
-// 已有目标：寻找同类别且 IoU 最大的候选，避免立刻跳到旁边的新目标。
+  // 已有目标：寻找同类别且 IoU 最大的候选，避免立刻跳到旁边的新目标。
   if (target_) {
     double best = -1;
     for (const auto &d : candidates) {
@@ -263,12 +277,12 @@ Solution Pipeline::process(const Frame &f,
     if (!chosen)
       return reject("locked_target_missing");
   } else {
-// 无锁定时选择最靠近主点的框；距离相同才按置信度打破平局。
+    // 无锁定时选择最靠近主点的框；距离相同才按置信度打破平局。
     double best = std::numeric_limits<double>::infinity();
     for (const auto &d : candidates) {
       auto p = d.box.center();
-      const double score =
-          (p.x-reference.x)*(p.x-reference.x)+(p.y-reference.y)*(p.y-reference.y);
+      const double score = (p.x - reference.x) * (p.x - reference.x) +
+                           (p.y - reference.y) * (p.y - reference.y);
       if (score < best ||
           (score == best && chosen && d.confidence > chosen->confidence)) {
         chosen = d;
@@ -279,76 +293,107 @@ Solution Pipeline::process(const Frame &f,
       return reject("no_target");
     ++track_id_;
   }
-// 二维确认不依赖深度，丢失后不跨间隔计算像素速度。
-  if (target_ && last_seen_ && detection_consecutive_>0)
-    s.image_velocity_px_s=(chosen->box.center()-target_->box.center())*(1./(f.capture_s-*last_seen_));
-  if (s.image_velocity_px_s && !finite({s.image_velocity_px_s->x,s.image_velocity_px_s->y}))
+  // 二维确认不依赖深度，丢失后不跨间隔计算像素速度。
+  if (target_ && last_seen_ && detection_consecutive_ > 0)
+    s.image_velocity_px_s = (chosen->box.center() - target_->box.center()) *
+                            (1. / (f.capture_s - *last_seen_));
+  if (s.image_velocity_px_s &&
+      !finite({s.image_velocity_px_s->x, s.image_velocity_px_s->y}))
     s.image_velocity_px_s.reset();
-  target_=chosen; last_seen_=f.capture_s;
+  target_ = chosen;
+  last_seen_ = f.capture_s;
   ++detection_consecutive_;
-  s.track_id=track_id_; s.class_id=chosen->class_id;
-  s.confidence=chosen->confidence; s.box=chosen->box; s.center_uv=chosen->box.center();
-  s.detection_valid=detection_consecutive_>=config_.confirm_frames;
-  s.tracking_state=s.detection_valid ? "tracking" : "acquiring";
-  if (!s.detection_valid) s.image_velocity_px_s.reset();
-  if (calibrated) s.pixel_error=*s.center_uv-reference;
+  s.track_id = track_id_;
+  s.class_id = chosen->class_id;
+  s.confidence = chosen->confidence;
+  s.box = chosen->box;
+  s.center_uv = chosen->box.center();
+  s.detection_valid = detection_consecutive_ >= config_.confirm_frames;
+  s.tracking_state = s.detection_valid ? "tracking" : "acquiring";
+  if (!s.detection_valid)
+    s.image_velocity_px_s.reset();
+  if (calibrated)
+    s.pixel_error = *s.center_uv - reference;
   if (chosen->features) {
-    const auto inside=[&](cv::Point2d p) {
-      return finite({p.x,p.y}) && p.x>=0 && p.y>=0 && p.x<f.color_bgr.cols && p.y<f.color_bgr.rows;
+    const auto inside = [&](cv::Point2d p) {
+      return finite({p.x, p.y}) && p.x >= 0 && p.y >= 0 &&
+             p.x < f.color_bgr.cols && p.y < f.color_bgr.rows;
     };
-    bool good=true; const auto &features=*chosen->features;
-    if (features.light_bars) for (const auto &bar:*features.light_bars)
-      good &= inside(bar.top) && inside(bar.bottom) && cv::norm(bar.top-bar.bottom)>0;
+    bool good = true;
+    const auto &features = *chosen->features;
+    if (features.light_bars)
+      for (const auto &bar : *features.light_bars)
+        good &= inside(bar.top) && inside(bar.bottom) &&
+                cv::norm(bar.top - bar.bottom) > 0;
     if (features.corners) {
-      const auto &c=*features.corners;
-      for(int i=0;i<4;++i) {
-        const auto u=c[(i+1)%4]-c[i], v=c[(i+2)%4]-c[(i+1)%4];
-        good &= inside(c[i]) && u.x*v.y-u.y*v.x>1e-6;
+      const auto &c = *features.corners;
+      for (int i = 0; i < 4; ++i) {
+        const auto u = c[(i + 1) % 4] - c[i],
+                   v = c[(i + 2) % 4] - c[(i + 1) % 4];
+        good &= inside(c[i]) && u.x * v.y - u.y * v.x > 1e-6;
       }
     }
     good &= features.light_bars.has_value() || features.corners.has_value();
-    s.features_reason=good ? "ok" : "invalid_features";
-    if (good) s.features=features;
+    s.features_reason = good ? "ok" : "invalid_features";
+    if (good)
+      s.features = features;
   }
   // 三维失败只重置三维确认，不覆盖本帧二维有效性。
-  auto positionReject=[&](const std::string &reason) {
-    consecutive_=0; s.reason=s.position_reason=reason; return s;
+  auto positionReject = [&](const std::string &reason) {
+    consecutive_ = 0;
+    s.reason = s.position_reason = reason;
+    return s;
   };
-  if (!calibrated) return positionReject("intrinsics_unavailable_or_invalid");
-  if (!f.rectified && !f.deproject) return positionReject("projection_model_unavailable");
+  if (!calibrated)
+    return positionReject("intrinsics_unavailable_or_invalid");
+  if (!f.rectified && !f.deproject)
+    return positionReject("projection_model_unavailable");
   cv::Vec3d ray;
   try {
-    ray=f.deproject ? f.deproject(s.center_uv->x,s.center_uv->y,1.) : k.deproject(s.center_uv->x,s.center_uv->y,1.);
-  } catch(const std::exception &) { return positionReject("deprojection_failed"); }
-  const double norm=cv::norm(ray);
-  if (!finite({ray[0],ray[1],ray[2],norm}) || ray[2]<=0 || norm<=0)
+    ray = f.deproject ? f.deproject(s.center_uv->x, s.center_uv->y, 1.)
+                      : k.deproject(s.center_uv->x, s.center_uv->y, 1.);
+  } catch (const std::exception &) {
+    return positionReject("deprojection_failed");
+  }
+  const double norm = cv::norm(ray);
+  if (!finite({ray[0], ray[1], ray[2], norm}) || ray[2] <= 0 || norm <= 0)
     return positionReject("invalid_3d_point");
   if (s.detection_valid) {
-    s.bearing_camera=ray/norm; s.bearing_valid=true;
-    s.yaw_error_rad=std::atan2(ray[0],ray[2]);
-    s.pitch_error_rad=std::atan2(-ray[1],std::hypot(ray[0],ray[2]));
+    s.bearing_camera = ray / norm;
+    s.bearing_valid = true;
+    s.yaw_error_rad = std::atan2(ray[0], ray[2]);
+    s.pitch_error_rad = std::atan2(-ray[1], std::hypot(ray[0], ray[2]));
   }
-  if (f.depth_m.empty()) return positionReject("depth_unavailable");
-  if (!std::isfinite(f.sync_error_s) || std::abs(f.sync_error_s)>config_.max_sync_error_s)
+  if (f.depth_m.empty())
+    return positionReject("depth_unavailable");
+  if (!std::isfinite(f.sync_error_s) ||
+      std::abs(f.sync_error_s) > config_.max_sync_error_s)
     return positionReject("rgb_depth_unsynchronized");
-  if (f.depth_m.type()!=CV_32FC1 || f.depth_m.size()!=f.color_bgr.size())
+  if (f.depth_m.type() != CV_32FC1 || f.depth_m.size() != f.color_bgr.size())
     return positionReject("image_intrinsics_shape_mismatch");
-  const auto depth=estimateDepth(f.depth_m,chosen->box,config_);
-  s.depth_valid_ratio=depth.valid_ratio; s.depth_mad_m=depth.mad;
-  if (!depth.depth) return positionReject(depth.reason);
+  const auto depth = estimateDepth(f.depth_m, chosen->box, config_);
+  s.depth_valid_ratio = depth.valid_ratio;
+  s.depth_mad_m = depth.mad;
+  if (!depth.depth)
+    return positionReject(depth.reason);
   cv::Vec3d point;
   try {
-    point=f.deproject ? f.deproject(s.center_uv->x,s.center_uv->y,*depth.depth) : k.deproject(s.center_uv->x,s.center_uv->y,*depth.depth);
-  } catch(const std::exception &) { return positionReject("deprojection_failed"); }
-  if (!finite({point[0],point[1],point[2],cv::norm(point)}) || point[2]<=0)
+    point = f.deproject
+                ? f.deproject(s.center_uv->x, s.center_uv->y, *depth.depth)
+                : k.deproject(s.center_uv->x, s.center_uv->y, *depth.depth);
+  } catch (const std::exception &) {
+    return positionReject("deprojection_failed");
+  }
+  if (!finite({point[0], point[1], point[2], cv::norm(point)}) || point[2] <= 0)
     return positionReject("invalid_3d_point");
   ++consecutive_;
-  if (consecutive_<config_.confirm_frames) {
-    s.reason=s.position_reason="acquiring"; return s;
+  if (consecutive_ < config_.confirm_frames) {
+    s.reason = s.position_reason = "acquiring";
+    return s;
   }
-  s.point_camera=point;
-  s.bearing_camera=point/cv::norm(point);
-// 从光学系三维点计算视线角；Y 向下，所以俯仰角使用 -Y。
+  s.point_camera = point;
+  s.bearing_camera = point / cv::norm(point);
+  // 从光学系三维点计算视线角；Y 向下，所以俯仰角使用 -Y。
   s.yaw_error_rad = std::atan2(point[0], point[2]);
   s.pitch_error_rad = std::atan2(-point[1], std::hypot(point[0], point[2]));
   if (config_.body_T_camera) {
@@ -366,7 +411,9 @@ Solution Pipeline::process(const Frame &f,
 // 生成调试图：白色十字为主点，绿色为有效结果，橙色为未确认/失效结果。
 cv::Mat annotate(const Frame &f, const Solution &s) {
   auto image = f.color_bgr.clone();
-  cv::Point origin = s.pixel_error ? cv::Point(cvRound(f.intrinsics.cx),cvRound(f.intrinsics.cy)) : cv::Point(image.cols/2,image.rows/2);
+  cv::Point origin = s.pixel_error ? cv::Point(cvRound(f.intrinsics.cx),
+                                               cvRound(f.intrinsics.cy))
+                                   : cv::Point(image.cols / 2, image.rows / 2);
   cv::drawMarker(image, origin, {255, 255, 255}, cv::MARKER_CROSS, 14, 1);
   if (s.box) {
     const cv::Scalar color =
@@ -379,10 +426,12 @@ cv::Mat annotate(const Frame &f, const Solution &s) {
   }
   // 只绘制上游提供并校验通过的特征。
   if (s.features) {
-    if (s.features->light_bars) for(const auto &bar:*s.features->light_bars)
-      cv::line(image,bar.top,bar.bottom,{255,255,0},2);
-    if (s.features->corners) for(const auto &p:*s.features->corners)
-      cv::circle(image,p,3,{255,0,255},-1);
+    if (s.features->light_bars)
+      for (const auto &bar : *s.features->light_bars)
+        cv::line(image, bar.top, bar.bottom, {255, 255, 0}, 2);
+    if (s.features->corners)
+      for (const auto &p : *s.features->corners)
+        cv::circle(image, p, 3, {255, 0, 255}, -1);
   }
   cv::putText(image, std::to_string(s.sequence) + ": " + s.reason, {8, 20},
               cv::FONT_HERSHEY_SIMPLEX, .45, {255, 255, 255}, 1);

@@ -10,9 +10,9 @@ public:
   ~JsonLog();
   JsonLog(const JsonLog &) = delete;
   JsonLog &operator=(const JsonLog &) = delete;
-// 返回实际创建的路径，可能与请求路径不同，供终端汇总使用。
+  // 返回实际创建的路径，可能与请求路径不同。
   const std::string &path() const { return path_; }
-// 写入一条文本并加换行、刷新用户态缓冲；写盘失败抛异常。
+  // 写入一条文本并加换行、刷新用户态缓冲；写盘失败抛异常。
   void write(const std::string &text);
 
 private:

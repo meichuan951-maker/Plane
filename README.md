@@ -4,11 +4,27 @@
 **普通 USB 相机 + 传统红蓝灯条检测 + 装甲板跟踪 + 相机标定/PnP**，不要求 YOLO 或海康 SDK。
 定位接入方案为 **MicoVIO → PX4 → 香橙派**，不使用 GPS；目前仍需独立完成实际融合与导航集成验收。
 
-仓库：[meichuan951-maker/Plane](https://github.com/meichuan951-maker/Plane)。文档更新：2026-10-12。
+仓库：[meichuan951-maker/Plane](https://github.com/meichuan951-maker/Plane)。文档更新：2026-10-16。
 
 运行命令见本页。开发顺序与验收目标见 [视觉无人机路线图](docs/visual_drone_roadmap.md)，
 数据/坐标/时间契约见 [接口说明](docs/interfaces.md)，选型与安装标定见 [硬件说明](docs/hardware.md)。
 后续需要 YOLO 时再阅读 [红蓝训练指南](docs/training.md)。
+深度相机的独立使用步骤、当前能力和后续计划见 [Astra Pro 深度相机仓库](https://github.com/meichuan951-maker/shendu_camera)。
+
+## 规则依据与当前边界
+
+当前空中系统的规则依据是 `test_1/` 中 2026-10-15 发布的
+[《RoboMaster 2027 超级对抗赛比赛规则手册 V1.0.0》](test_1/RoboMaster%202027%20机甲大师超级对抗赛比赛规则手册V1.0.0（20261015）.pdf)。
+同目录的高校联盟赛**参赛手册**涉及参赛与技术评审，不替代超级对抗赛的比赛规则；根目录旧版变更前瞻只作历史资料。
+
+- §3.2.1，印刷第 27 页：空中机器人全自动运行，配备急停遥控器；多机通信仅通过机库间接进行。当前 PX4 串口是机内诊断链路，尚未实现机库多机通信。
+- 表 5-2，印刷第 65 页：空中机器人冲击对基地装甲、前哨站中部装甲有对应的伤害项目，机器人装甲和飞镖检测模块不应混为同一类目标。灯条检测尚未识别这些物理模块身份。
+- R47/R48，印刷第 131 页：准备阶段不得启动桨叶，飞行不得出战场。当前没有比赛阶段输入、场地围栏或禁区地图，不能将任务模拟的 `segment_clear=true` 夹具用于真实场地。
+- R62/R64，印刷第 134 页：能量机关、机库不是允许冲击的目标，并有飞镖发射站禁区约束。当前红蓝颜色和临时跟踪号不能证明目标类别或区域合法。
+- §5.1.1，印刷第 64 页：空中机器人冲击的接触时间、面累积冲量仍标“待定”。不根据旧前瞻或图纸填入确定的冲击阈值。
+
+任务模块目前只生成 `executable=false` 的离线意图，外部授权、目标区域确认和路径验证仍是调用方输入，
+并非已经接入裁判系统。继续以地面感知、定位和目标前停住为本阶段验收目标。
 
 ## 当前目标与开发顺序
 
@@ -55,27 +71,32 @@ no_demo/
 │   ├── input/               # UVC 采集/控制/进程、深度、synthetic/replay/realsense
 │   ├── navigation/          # 坐标、定位历史和任务状态机
 │   ├── io/                  # 遥测缓存、MAVLink、UART
-│   └── app/                 # 独立入口、camera/ 应用层、标定、日志、ROS
+│   └── app/                 # 薄入口与 camera/、armor_auto/、depth/ 应用模块
 ├── config/                  # 灯条、自动装甲、YOLO/观测与 PX4 链路配置
 ├── scripts/                 # armor_auto、Astra 深度的开发机启动脚本
 ├── tools/                   # 独立 Astra 深度诊断源码
 ├── test/                    # 视觉、标定、取流、深度、导航、通信回归
 ├── examples/cpp_replay/      # 最小回放输入夹具
 ├── docs/                    # 开发路线、接口、硬件与训练说明
-├── picture/、test_1/         # 原始目标与模块资料
+├── test_1/                  # 2027 完整规则、参赛手册及原始模块资料
 ├── models/                  # 用户模型，不提交权重
 ├── runs/                    # 日志和预览，不提交生成输出
 └── build_cpp/               # 统一构建目录，不提交生成文件
 ```
 
 从 `src/app/camera_light_test.cpp` → `src/app/camera/` 阅读 USB 预览和阈值测试；
-从 `src/app/armor_auto_main.cpp` → `src/vision/armor_tracker.cpp`、`armor_pose.cpp` 阅读自动装甲链路；
+从 `src/app/armor_auto_main.cpp` → `src/app/armor_auto/application.cpp` →
+`src/vision/armor_tracker.cpp`、`armor_pose.cpp` 阅读自动装甲链路；
+从 `src/app/astra_live_measure.cpp` → `src/app/depth/application.cpp` 阅读深度预览；
 从 `src/app/armor_calibrate.cpp` → `src/vision/camera_calibration.cpp` 阅读相机标定；
 从 `src/app/main.cpp` → `application.cpp` → `src/vision/core.cpp` 阅读既有观测链路；
 从 `src/app/localization_main.cpp` → `src/io/mavlink_link.cpp` 阅读定位接收；
 从 `src/app/mission_demo.cpp` 阅读坐标和任务模块的组合方式。
 公共 include、可执行名称、CLI 和配置路径保持兼容，源码物理目录按职责归组。
-原规则 PDF 留在项目根目录。独立地图工程 `../rmuc_gazebo_map` 不属于本项目构建。
+`camera/`、`armor_auto/`、`depth/` 分别负责自己的采集循环、参数和预览；后两者的 `output.cpp`
+集中生成/清空测量 JSON，`common/` 只复用整数解析和 FPS 统计。RGB 与深度的坐标、标定和有效性规则独立维护。
+`aim_camera_stream` 复用进程监管和 UVC 控制，`aim_uvc_worker` 仅提供 RGB 采集；Astra 保留专用深度 worker。
+完整规则位于 `test_1/`，旧版变更前瞻 PDF 留在项目根目录。独立地图工程 `../rmuc_gazebo_map` 不属于本项目构建。
 
 ## 编译和回归
 
@@ -102,13 +123,24 @@ ctest --test-dir build_cpp --output-on-failure
 后文按需重新启用相关选项；`demo_aim_cpp --help` 显示实际 RealSense/ROS 编译能力。
 x86_64 开发机程序不能直接复制到 ARM64 香橙派运行；`scripts/` 的库搜索路径也需按板端环境调整。
 
-`BUILD_TESTING=ON` 时，基础配置登记 **11 项 CTest**；启用 Astra 增加 1 项，启用 MAVLink 增加 2 项，
-两者同时启用共 14 项。数量以 `ctest --test-dir build_cpp -N` 为准，不等于测试程序内部断言数量。
+`BUILD_TESTING=ON` 时，基础配置登记 **13 项 CTest**；启用 Astra 增加 1 项，启用 MAVLink 增加 2 项，
+两者同时启用共 16 项。数量以 `ctest --test-dir build_cpp -N` 为准，不等于测试程序内部断言数量。
 覆盖灯条提取/配对、姿态多解、自动装甲配置/跟踪/标定、深度平面、观测、坐标/任务、CLI 和 UVC 取流/控制。
 取流回归用独立进程模拟打开设备卡住、帧发布卡住、控制卡住、持锁进程退出、断流后恢复，以及扫焦期间持续预览；无需真实相机。
 这些是开发机软件回归，不是相机识别准确率、板端实时性或真实飞行验收。
 
+`aim_app_output_regression` 无需相机或厂商 SDK，覆盖 RGB/深度输出时效、停止清空、角度含义和坐标映射。
+JSON 与预览使用处理完成后的帧龄；即使缓存中保留有效姿态，帧超过 250 ms 后也不输出有效测量。
+`aim_armor_snapshot_regression` 检查退出截图使用同一帧的原图与重新生成的叠加图，并检查过期/故障状态及覆盖保护。
+定位历史、地图变换与任务层复用 `PoseSample::validate()` 检查元数据和几何完整性；任务在非降落阶段意外着陆后中止并锁存。
+
 2026-10-12 项目首次推送前验证：开发机构建成功，Astra 开启、MAVLink 关闭，12 项 CTest 全部通过。
+2026-10-14 结构整理验证：所有可选后端关闭时 12 项通过；RealSense、ROS 2、MAVLink、Astra
+全部启用时 15 项通过。合成和 PNG 回放的逐帧 JSON 与整理前的已构建程序一致，安装入口包含六个程序。
+2026-10-16 规则与异常路径复查：基础配置 13 项、全部可选后端开启 16 项 CTest 全部通过。
+新增/扩展截图同帧、IPC 描述符冲突、非法地图位姿、意外落地以及 MAVLink 采样过期/心跳/epoch 回归；
+合成、纯 RGB 合成和 PNG 回放在基础/全可选构建中的逐帧 JSON 一致。Astra SDK 缺厂商驱动时在配置阶段明确报错。
+以上未打开真实相机或飞控，不作为赛事执行、测量精度或飞行验收结论。
 
 ## 普通 USB 相机：实时画面与红蓝灯条（无 YOLO）
 
@@ -143,7 +175,7 @@ cd /home/user/nohuman_plane_std/no_demo
 默认请求 MJPG、640×480、30 FPS；使用 `--width`、`--height`、`--fps`、`--format MJPG|YUYV` 调整。
 设备不一定接受请求参数，启动日志显示驱动协商值，叠加显示实际图像尺寸。
 FPS 是最近约一秒完成的“采集+检测+显示”吞吐，首次统计前显示 0，不是传感器帧率或端到端延迟。
-`detect ms` 只统计灯条算法耗时。启动保留相机当前曝光、对焦和增益，不再等待亮度稳定或自动扫描整个焦点范围；第一帧到达即开始预览，终端报告首帧等待时间。不自动修改 USB 电源设置，USB 超时也不能直接认定为自动休眠。
+`detect ms` 只统计灯条算法耗时。带控制的预览在第一帧后应用设备支持的预览默认值：自动曝光、增益、数字锐度和连续自动对焦；不等待亮度稳定或自动扫描整个焦点范围。第一帧到达即开始预览，终端报告首帧等待时间。`--no-controls` 和无窗口模式跳过这些控制写入。不自动修改 USB 电源设置，USB 超时也不能直接认定为自动休眠。
 
 取流和控制在独立受监控子进程中执行，主进程负责窗口、检测及按键。共享内存只保留最新一帧，慢消费者不会积压旧帧。连续 3 秒没有新帧会终止本轮采集并重试，默认恢复预算为 15 秒（加上至多一次 3 秒设备等待）；`--reconnect-seconds N` 可调整，0 表示失败即退出。相机物理掉线或固件无响应时，仍可能需要重新插接/换线，软件重试不保证恢复设备。等待超过 250 ms 时显示等待提示并清空旧轮廓/掩膜；等待、重连和驱动卡住期间均可按 q/Esc 或 Ctrl+C 退出。不会无限等待子进程释放失效的设备。
 
@@ -222,7 +254,7 @@ FPS 是最近约一秒完成的“采集+检测+显示”吞吐，首次统计�
 target_color: 1 # 蓝色；改为 2 选择红色。修改后重启程序。
 ```
 
-当前默认 `2`（红色）。先根据 `camera_light_test --list` 的结果修改配置中的
+当前默认 `1`（蓝色），匹配现场蓝色靶；不识别板上的数字。先根据 `camera_light_test --list` 的结果修改配置中的
 `camera.device`、`width`、`height`、`fps` 和 `format`，不要直接照搬别人的设备编号。
 默认配置使用此前 Astra Pro UVC 的固定路径、640×480、30 FPS、YUYV。
 这些参数来自配置，不代表另一台相机也支持同样模式。驱动实际尺寸不一致时，`armor_auto` 会报错退出。
@@ -243,7 +275,7 @@ mkdir -p runs
 
 `q`/Esc 退出，`r` 清除当前目标并重新搜索。主窗口显示装甲候选、所选目标框、状态原因，
 有效时显示 Range/Z 和 **Surface（板面朝向）**；**目标中心 Bearing 偏角目前通过 JSON 输出，未叠加到窗口**。
-窗口 FPS 调试用 `camera_light_test`；`armor_auto` 的 `fps` 位于 JSON 中，是从启动起计算的平均处理吞吐。
+窗口和 JSON 均显示最近约一秒的新帧处理 FPS。
 
 JSON 默认以 10 Hz 输出，`--hz 1..60` 控制报告频率，不改变相机 FPS。
 未指定 `--output` 时写标准输出；指定时**追加**到文件，不自动编号，父目录需事先创建。
@@ -321,6 +353,40 @@ SDK 的 `convertDepthToWorld` 在这里指相机坐标；程序已将其 Y 向�
 输出机体/地图坐标还需要相机安装外参和相应时刻的机体位姿。
 
 ## Astra Pro：实时手动框选深度诊断
+
+同时启动 Astra 彩色装甲候选与深度测量窗口：
+
+```bash
+cmake --build build_cpp --target armor_auto astra_live_measure -j2
+bash ./scripts/astra_armor_live.sh
+```
+
+彩色硬件参数在 `config/astra_rgb_controls.yaml`。双窗口启动脚本使用
+Python 3/PyYAML 和 `v4l2-ctl` 应用配置，并检查范围、步长和驱动读回值。
+`backlight_compensation: 0` 关闭背光补偿，已实测比默认 1 更暗、灯条光晕减轻，
+但白芯未完全消除；该参数不是曝光时间。2026-10-12 本机 Astra Pro RGB
+标准 UVC AE/曝光请求均返回 PIPE，尚未取得可用手动曝光接口。
+不要把识别阈值或软件调暗当成恢复已饱和的颜色/边缘。
+运行中修改并立即应用：`python3 tools/astra_rgb_controls.py --apply`；
+省略 `--apply` 只检查当前值，不写入。驱动读回成功不等于图像质量验收。
+
+双窗口脚本默认启用**中心准星测距**：把深度图中心白色小框完全放在装甲板内部平整区域，
+有有效深度且通过平面质量检查时直接显示距离，无需鼠标拖框；
+中心测到墙面也会显示距离，`source=center_depth_surface`、`armor_identity_verified=false`，
+不能将它当成已经自动关联到彩色检测框的装甲中心。
+按 `c` 回到中心探针，拖框或按 `r` 切换手动区域；
+启动时加 `--manual-depth` 可关闭默认中心探针。
+单独运行可用 `./scripts/astra_live.sh --center-depth --local-world-fixed`。
+
+两个窗口分别显示最近约一秒的新帧 FPS。深度窗口对中心小框或手动选择的装甲内部平整区域，
+显示三维直线距离、前向深度、所选表面有效点均值的相机 XYZ 和固定局部世界 XYZ。
+局部世界原点为深度相机光心，X 向前、Y 向左、Z 向上；
+由相机光学系转换为 `[Z, -X, -Y]`，相机必须固定不动。
+这是用户定义的局部世界系，不是场地地图或 VIO 定位；所选点均值不保证是装甲几何中心。
+手动模式未选区域、无效深度或断流时显示 `n/a`、JSON 坐标为 `null`。
+彩色候选与深度区域仍未自动配准，手动区域不跟踪目标，目标移动后应重新框选。
+任一窗口按 q/Esc 退出双窗口；结果保存在启动时打印的 `runs/astra_armor_live_*/`。
+单独深度入口可使用 `./scripts/astra_live.sh --local-world-fixed` 启用相同局部世界坐标。
 
 此前 Astra Pro 的 RGB-D 出厂标定读回 NaN，尚未完成彩色识别框到深度的有效映射。
 `astra_live_measure` 因此采用独立的**深度图手动框选模式**：没有彩色自动配准，也没有目标跟踪。

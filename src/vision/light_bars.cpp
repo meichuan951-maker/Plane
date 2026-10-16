@@ -49,16 +49,24 @@ LightBarResult detectLightBars(const cv::Mat &bgr, const LightBarConfig &c) {
           length / width < c.min_aspect || length / width > c.max_aspect ||
           area / (length * width) < c.min_fill)
         continue;
-      cv::Point2f corners[4];
-      rect.points(corners);
-      auto direction = corners[1] - corners[0];
-      if (cv::norm(corners[2] - corners[1]) > cv::norm(direction))
-        direction = corners[2] - corners[1];
-      if (direction.y < 0)
-        direction = -direction;
+      // 过曝光晕让亮区变胖，minAreaRect 的角度会逐帧跳 ±10°；
+      // 用二阶矩主轴定方向，端点取轮廓在主轴上的投影极值。
+      const auto m = cv::moments(contour);
+      const double theta = 0.5 * std::atan2(2 * m.mu11, m.mu20 - m.mu02);
+      cv::Point2f axis(static_cast<float>(std::cos(theta)),
+                       static_cast<float>(std::sin(theta)));
+      if (axis.y < 0)
+        axis = -axis;
+      const cv::Point2f centroid(static_cast<float>(m.m10 / m.m00),
+                                 static_cast<float>(m.m01 / m.m00));
+      float t_min = 0, t_max = 0;
+      for (const auto &point : contour) {
+        const float t = (cv::Point2f(point) - centroid).dot(axis);
+        t_min = std::min(t_min, t);
+        t_max = std::max(t_max, t);
+      }
       const double tilt =
-          std::atan2(std::abs(direction.x), std::abs(direction.y)) * 180 /
-          CV_PI;
+          std::atan2(std::abs(axis.x), std::abs(axis.y)) * 180 / CV_PI;
       if (tilt > c.max_tilt_deg)
         continue;
       int color = pass;
@@ -83,8 +91,8 @@ LightBarResult detectLightBars(const cv::Mat &bgr, const LightBarConfig &c) {
         auto mask = (color == 0 ? result.red_mask : result.blue_mask)(bounds);
         cv::bitwise_or(mask, component, mask);
       }
-      result.bars.push_back({color, rect, rect.center - direction * 0.5f,
-                             rect.center + direction * 0.5f});
+      result.bars.push_back(
+          {color, rect, centroid + axis * t_min, centroid + axis * t_max});
     }
   }
   std::sort(result.bars.begin(), result.bars.end(),

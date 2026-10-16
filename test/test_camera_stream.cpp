@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <fcntl.h>
 #include <fstream>
 #include <iostream>
 #include <signal.h>
@@ -27,17 +28,24 @@ int fixture(const std::string &mode) {
   if (getppid() == 1)
     return 2;
   struct stat info {};
-  if (fstat(198, &info))
+  if (fstat(aim::kStreamSharedFd, &info))
     return 2;
   auto *shared = static_cast<aim::StreamShared *>(
-      mmap(nullptr, info.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, 198, 0));
+      mmap(nullptr, info.st_size, PROT_READ | PROT_WRITE, MAP_SHARED,
+           aim::kStreamSharedFd, 0));
   if (shared == MAP_FAILED)
     return 2;
   if (mode == "blocked-open")
     while (true)
       pause();
   if (mode == "closed-control")
-    close(199);
+    close(aim::kStreamCommandFd);
+  if (mode == "fd-layout") {
+    struct stat command_info {};
+    if (fstat(aim::kStreamCommandFd, &command_info) ||
+        !S_ISFIFO(command_info.st_mode))
+      return 2;
+  }
   const bool recover = mode.rfind("recover:", 0) == 0;
   const std::string marker = recover ? mode.substr(8) : "";
   const bool second = recover && std::filesystem::exists(marker);
@@ -46,7 +54,8 @@ int fixture(const std::string &mode) {
   std::uint64_t ack = 0;
   for (;;) {
     aim::StreamCommand command{};
-    while (read(199, &command, sizeof(command)) == ssize_t(sizeof(command))) {
+    while (read(aim::kStreamCommandFd, &command, sizeof(command)) ==
+           ssize_t(sizeof(command))) {
       if (mode == "blocked-control")
         while (true)
           pause();
@@ -59,7 +68,7 @@ int fixture(const std::string &mode) {
     if (recover && !second && age > 0.2) {
       std::ofstream(marker).put('1');
       pthread_mutex_lock(&shared->mutex);
-      shared->stage = 2;
+      shared->stage = aim::kStreamFailed;
       std::snprintf(shared->message, sizeof(shared->message),
                     "injected disconnect");
       pthread_mutex_unlock(&shared->mutex);
@@ -73,7 +82,7 @@ int fixture(const std::string &mode) {
       raise(SIGKILL);
       return 1;
     }
-    shared->stage = 1;
+    shared->stage = aim::kStreamLive;
     shared->width = shared->height = 64;
     shared->frame_type = mode == "depth" ? CV_32FC3 : CV_8UC3;
     auto *pixels = reinterpret_cast<unsigned char *>(shared + 1);
@@ -81,12 +90,13 @@ int fixture(const std::string &mode) {
     if (mode == "depth") {
       cv::Mat depth(64, 64, CV_32FC3, pixels);
       depth.setTo(cv::Scalar(.25, -.3, 1.1));
-    } else for (int y = 0; y < 64; ++y)
-      for (int x = 0; x < 64; ++x)
-        for (int c = 0; c < 3; ++c)
-          pixels[(y * 64 + x) * 3 + c] =
-              mode == "scan" ? ((x / 2 + y / 2) % 2 ? contrast : 0)
-                             : (second ? 222 : shared->sequence % 200);
+    } else
+      for (int y = 0; y < 64; ++y)
+        for (int x = 0; x < 64; ++x)
+          for (int c = 0; c < 3; ++c)
+            pixels[(y * 64 + x) * 3 + c] =
+                mode == "scan" ? ((x / 2 + y / 2) % 2 ? contrast : 0)
+                               : (second ? 222 : shared->sequence % 200);
     ++shared->sequence;
     shared->frame_time = aim::streamTime();
     shared->acknowledged = ack;
@@ -111,6 +121,22 @@ aim::StreamOptions settings(const std::string &mode, double retries = 0) {
   options.reconnect_seconds = retries;
   return options;
 }
+struct ReservedDescriptors {
+  std::vector<int> values;
+  ~ReservedDescriptors() {
+    for (const int value : values)
+      close(value);
+  }
+  void through(int last) {
+    for (;;) {
+      const int fd = open("/dev/null", O_RDONLY | O_CLOEXEC);
+      require(fd >= 0, "Could not reserve descriptor collision fixture");
+      values.push_back(fd);
+      if (fd >= last)
+        return;
+    }
+  }
+};
 template <class Check>
 void until(aim::CameraStream &stream, cv::Mat &frame,
            aim::CameraControls &controls, double limit, Check check) {
@@ -135,16 +161,19 @@ int main(int argc, char **argv) {
     cv::Mat frame;
     aim::CameraControls controls;
     {
-      auto s = settings("depth"); s.frame_type = CV_32FC3;
+      auto s = settings("depth");
+      s.frame_type = CV_32FC3;
       aim::CameraStream stream(s);
       until(stream, frame, controls, 2,
             [](auto r) { return r == aim::CameraStream::Result::Frame; });
       require(frame.type() == CV_32FC3 &&
-              cv::norm(frame.at<cv::Vec3f>(0, 0) - cv::Vec3f(.25, -.3, 1.1)) < 1e-6,
+                  cv::norm(frame.at<cv::Vec3f>(0, 0) -
+                           cv::Vec3f(.25, -.3, 1.1)) < 1e-6,
               "depth IPC changed XYZ type or units");
     }
     {
-      auto s = settings("live"); s.frame_type = CV_32FC3;
+      auto s = settings("live");
+      s.frame_type = CV_32FC3;
       aim::CameraStream stream(s);
       until(stream, frame, controls, 2, [](auto r) {
         require(r != aim::CameraStream::Result::Frame,
@@ -207,6 +236,24 @@ int main(int argc, char **argv) {
       require(stream.command(aim::CameraCommand::Focus, 0) == 0,
               "closed control channel was reported as accepting requests");
       // 若管道写入产生的 SIGPIPE 未正确处理，测试进程会在上行调用中被杀死。
+    }
+    {
+      // memfd=197 and the pipe read end=198: duplicating the memfd to the
+      // protocol FD 198 first must not overwrite the original pipe source.
+      ReservedDescriptors reserved;
+      reserved.through(aim::kStreamSharedFd - 2);
+      aim::CameraStream stream(settings("fd-layout"));
+      until(stream, frame, controls, 2, [](auto r) {
+        require(r != aim::CameraStream::Result::Failed,
+                "Descriptor transfer replaced the control pipe");
+        return r == aim::CameraStream::Result::Frame;
+      });
+      const auto command = stream.command(aim::CameraCommand::Focus, 13);
+      require(command != 0, "Descriptor collision broke control requests");
+      until(stream, frame, controls, 1,
+            [&](auto) { return stream.acknowledged() == command; });
+      require(controls.focus_value == 13 && stream.commandSucceeded(),
+              "Control pipe was lost when inherited descriptors overlapped");
     }
     {
       aim::CameraStream stream(settings("scan"));

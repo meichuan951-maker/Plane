@@ -57,6 +57,7 @@ private:
   double entered_s_{}, last_now_{-1}, last_target_s_{};
   std::uint64_t epoch_{};
   std::size_t route_index_{};
+  bool airborne_seen_{false};
   std::optional<int> target_id_;
   std::optional<cv::Vec3d> approach_point_;
   void enter(MissionPhase phase, double now);

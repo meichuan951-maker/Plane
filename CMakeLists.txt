@@ -17,14 +17,16 @@ find_package(nlohmann_json 3.2 REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
 
-# Domain logic depends only on image geometry, configuration and message types.
-# 核心只依赖图像几何、配置及 JSON；PUBLIC 依赖供调用者使用，PRIVATE 属于实现细节。
-add_library(aim_core
-  src/vision/core.cpp
-  src/vision/observation.cpp
-  src/io/flight_state.cpp)
-target_include_directories(aim_core PUBLIC include ${OpenCV_INCLUDE_DIRS})
-target_link_libraries(aim_core PUBLIC opencv_core nlohmann_json::nlohmann_json
+# 数据契约和遥测缓存独立构建，导航不再依赖视觉流水线的实现。
+add_library(aim_observation src/vision/observation.cpp)
+target_include_directories(aim_observation PUBLIC include ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(aim_observation PUBLIC opencv_core nlohmann_json::nlohmann_json)
+add_library(aim_flight_state src/io/flight_state.cpp)
+target_link_libraries(aim_flight_state PUBLIC aim_observation)
+
+# 保留 aim_core 的公共依赖，兼容现有视觉调用者。
+add_library(aim_core src/vision/core.cpp)
+target_link_libraries(aim_core PUBLIC aim_observation aim_flight_state
                                PRIVATE opencv_imgproc yaml-cpp)
 
 # 检测库封装 DNN 与模型文件哈希，向应用输出公共 Detection 类型。
@@ -37,7 +39,7 @@ add_library(aim_input
   src/input/synthetic.cpp
   src/input/replay.cpp
   src/input/realsense.cpp)
-target_link_libraries(aim_input PUBLIC aim_core PRIVATE opencv_imgcodecs)
+target_link_libraries(aim_input PUBLIC aim_observation PRIVATE opencv_imgcodecs)
 if(AIM_WITH_REALSENSE)
   find_package(realsense2 QUIET)
   if(realsense2_FOUND)
@@ -71,6 +73,15 @@ endif()
 add_executable(demo_aim_cpp src/app/main.cpp)
 target_link_libraries(demo_aim_cpp PRIVATE aim_app)
 
+# 进程监管/共享帧只构建一次；RGB 和 Astra 保留各自采集 worker。
+add_library(aim_camera_stream STATIC
+  src/input/uvc_stream.cpp
+  src/input/uvc_controls.cpp)
+target_include_directories(aim_camera_stream PUBLIC ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(aim_camera_stream PUBLIC opencv_core Threads::Threads)
+add_library(aim_uvc_worker STATIC src/input/uvc_worker.cpp)
+target_link_libraries(aim_uvc_worker PUBLIC aim_camera_stream PRIVATE opencv_videoio)
+
 # 无模型、无相机厂商 SDK 的独立 UVC/传统灯条验证入口。
 add_library(aim_light_bars
   src/vision/light_bars.cpp
@@ -86,60 +97,56 @@ add_executable(camera_light_test
   src/app/camera/application.cpp
   src/app/camera/options.cpp
   src/app/camera/preview.cpp
-  src/app/camera/snapshot.cpp
-  src/input/uvc_controls.cpp
-  src/input/uvc_stream.cpp
-  src/input/uvc_worker.cpp)
-target_link_libraries(camera_light_test PRIVATE aim_light_bars opencv_videoio
+  src/app/camera/snapshot.cpp)
+target_link_libraries(camera_light_test PRIVATE aim_light_bars aim_uvc_worker
   opencv_highgui opencv_imgcodecs opencv_imgproc Threads::Threads)
-target_compile_options(aim_light_bars PRIVATE -Wall -Wextra -Wpedantic)
-target_compile_options(camera_light_test PRIVATE -Wall -Wextra -Wpedantic)
 
-add_library(aim_armor_auto src/vision/armor_auto_config.cpp src/vision/armor_tracker.cpp src/vision/camera_calibration.cpp)
+add_library(aim_armor_auto
+  src/vision/armor_auto_config.cpp
+  src/vision/armor_tracker.cpp
+  src/vision/camera_calibration.cpp)
 target_link_libraries(aim_armor_auto PUBLIC aim_light_bars PRIVATE yaml-cpp opencv_calib3d)
-target_compile_options(aim_armor_auto PRIVATE -Wall -Wextra -Wpedantic)
+add_library(aim_armor_output STATIC src/app/armor_auto/output.cpp)
+target_link_libraries(aim_armor_output PUBLIC aim_armor_auto nlohmann_json::nlohmann_json)
 add_executable(armor_auto src/app/armor_auto_main.cpp src/app/armor_calibrate.cpp
-  src/input/uvc_stream.cpp src/input/uvc_worker.cpp src/input/uvc_controls.cpp)
-target_link_libraries(armor_auto PRIVATE aim_armor_auto opencv_highgui opencv_videoio
+  src/app/armor_auto/application.cpp src/app/armor_auto/options.cpp
+  src/app/armor_auto/preview.cpp)
+target_link_libraries(armor_auto PRIVATE aim_armor_output aim_uvc_worker opencv_highgui
   opencv_imgproc opencv_imgcodecs opencv_calib3d yaml-cpp nlohmann_json::nlohmann_json Threads::Threads)
-target_compile_options(armor_auto PRIVATE -Wall -Wextra -Wpedantic)
 
 # 深度区域平面测量独立于厂商 SDK，便于离线验证。
 add_library(aim_depth_plane src/vision/depth_plane.cpp)
 target_include_directories(aim_depth_plane PUBLIC include ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(aim_depth_plane PUBLIC opencv_core)
-target_compile_options(aim_depth_plane PRIVATE -Wall -Wextra -Wpedantic)
+# 输出有效性可在没有 Astra SDK/硬件的环境下回归。
+add_library(aim_depth_output STATIC src/app/depth/output.cpp)
+target_link_libraries(aim_depth_output PUBLIC aim_depth_plane nlohmann_json::nlohmann_json)
 option(AIM_WITH_ASTRA "Build Astra Pro manual depth live measurement" OFF)
 set(AIM_ASTRA_SDK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../vio_std/OpenNI_2.3.0.63/Linux/OpenNI-Linux-x64-2.3.0.63" CACHE PATH "Vendor OpenNI 2.3.0.63 root")
 if(AIM_WITH_ASTRA)
   if(NOT EXISTS "${AIM_ASTRA_SDK_ROOT}/Include/OpenNI.h" OR
-     NOT EXISTS "${AIM_ASTRA_SDK_ROOT}/Samples/Bin/libOpenNI2.so")
-    message(FATAL_ERROR "Set AIM_ASTRA_SDK_ROOT to vendor OpenNI 2.3.0.63 root")
+     NOT EXISTS "${AIM_ASTRA_SDK_ROOT}/Samples/Bin/libOpenNI2.so" OR
+     NOT EXISTS "${AIM_ASTRA_SDK_ROOT}/Samples/Bin/OpenNI2/Drivers/liborbbec.so")
+    message(FATAL_ERROR "Set AIM_ASTRA_SDK_ROOT to a complete vendor OpenNI 2.3.0.63 SDK (Include/OpenNI.h, Samples/Bin/libOpenNI2.so and Samples/Bin/OpenNI2/Drivers/liborbbec.so)")
   endif()
   add_executable(astra_live_measure src/app/astra_live_measure.cpp
-    src/input/astra_depth_worker.cpp src/input/uvc_stream.cpp src/input/uvc_controls.cpp)
+    src/app/depth/application.cpp src/app/depth/options.cpp
+    src/app/depth/preview.cpp src/input/astra_depth_worker.cpp)
   target_include_directories(astra_live_measure SYSTEM PRIVATE "${AIM_ASTRA_SDK_ROOT}/Include")
-  target_link_libraries(astra_live_measure PRIVATE aim_depth_plane
+  target_link_libraries(astra_live_measure PRIVATE aim_depth_output aim_camera_stream
     "${AIM_ASTRA_SDK_ROOT}/Samples/Bin/libOpenNI2.so"
-    opencv_highgui opencv_imgproc Threads::Threads nlohmann_json::nlohmann_json)
-  target_compile_options(astra_live_measure PRIVATE -Wall -Wextra -Wpedantic)
+    opencv_highgui opencv_imgproc opencv_imgcodecs Threads::Threads nlohmann_json::nlohmann_json)
+  install(TARGETS astra_live_measure RUNTIME DESTINATION bin)
 endif()
-
-# 对各项目目标开启常用编译警告。
-foreach(target aim_core aim_detector aim_input aim_app demo_aim_cpp)
-  target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
-endforeach()
 
 # 定位和任务决策只依赖核心几何；离线验证不需要 MAVLink/飞控。
 add_library(aim_navigation
   src/navigation/geometry.cpp
   src/navigation/localization.cpp
   src/navigation/mission.cpp)
-target_link_libraries(aim_navigation PUBLIC aim_core)
-target_compile_options(aim_navigation PRIVATE -Wall -Wextra -Wpedantic)
+target_link_libraries(aim_navigation PUBLIC aim_observation)
 add_executable(demo_mission_cpp src/app/mission_demo.cpp)
 target_link_libraries(demo_mission_cpp PRIVATE aim_navigation)
-target_compile_options(demo_mission_cpp PRIVATE -Wall -Wextra -Wpedantic)
 
 # 使用官方生成头文件，不自动联网下载，也不改变用户 PX4 工程。
 option(AIM_WITH_MAVLINK "Build PX4 serial localization receiver" OFF)
@@ -150,11 +157,9 @@ if(AIM_WITH_MAVLINK)
   endif()
   add_library(aim_mavlink src/io/mavlink_link.cpp src/io/serial_port.cpp)
   target_include_directories(aim_mavlink SYSTEM PRIVATE "${AIM_MAVLINK_INCLUDE_DIR}")
-  target_link_libraries(aim_mavlink PUBLIC aim_navigation)
-  target_compile_options(aim_mavlink PRIVATE -Wall -Wextra -Wpedantic)
+  target_link_libraries(aim_mavlink PUBLIC aim_navigation aim_flight_state)
   add_executable(px4_localization_cpp src/app/localization_main.cpp)
   target_link_libraries(px4_localization_cpp PRIVATE aim_mavlink yaml-cpp)
-  target_compile_options(px4_localization_cpp PRIVATE -Wall -Wextra -Wpedantic)
   install(TARGETS px4_localization_cpp RUNTIME DESTINATION bin)
   install(FILES config/px4_link.yaml DESTINATION share/no_demo_aim)
 endif()
@@ -162,6 +167,14 @@ endif()
 # BUILD_TESTING 默认开启；登记视觉、定位、任务与可选通信回归。
 include(CTest)
 if(BUILD_TESTING)
+  add_executable(aim_app_output_tests test/test_app_output.cpp)
+  target_link_libraries(aim_app_output_tests PRIVATE aim_armor_output aim_depth_output)
+  add_test(NAME aim_app_output_regression COMMAND aim_app_output_tests)
+  add_executable(aim_armor_snapshot_tests test/test_armor_snapshot.cpp
+    src/app/armor_auto/preview.cpp)
+  target_link_libraries(aim_armor_snapshot_tests PRIVATE aim_armor_output
+    opencv_imgproc opencv_imgcodecs)
+  add_test(NAME aim_armor_snapshot_regression COMMAND aim_armor_snapshot_tests)
   add_executable(aim_armor_auto_tests test/test_armor_auto.cpp)
   target_link_libraries(aim_armor_auto_tests PRIVATE aim_armor_auto yaml-cpp)
   add_test(NAME aim_armor_auto_regression COMMAND aim_armor_auto_tests ${CMAKE_CURRENT_SOURCE_DIR}/config/armor_auto.yaml)
@@ -174,39 +187,47 @@ if(BUILD_TESTING)
   endif()
   add_executable(aim_light_bar_tests test/test_light_bars.cpp)
   target_link_libraries(aim_light_bar_tests PRIVATE aim_light_bars opencv_imgproc opencv_calib3d)
-  target_compile_options(aim_light_bar_tests PRIVATE -Wall -Wextra -Wpedantic)
   add_test(NAME aim_light_bar_regression COMMAND aim_light_bar_tests ${CMAKE_CURRENT_SOURCE_DIR}/config/light_bars.yaml)
   add_test(NAME aim_camera_light_help COMMAND camera_light_test --help)
-  add_executable(aim_uvc_control_tests test/test_uvc_controls.cpp src/input/uvc_controls.cpp)
-  target_compile_options(aim_uvc_control_tests PRIVATE -Wall -Wextra -Wpedantic)
+  add_executable(aim_uvc_control_tests test/test_uvc_controls.cpp)
+  target_link_libraries(aim_uvc_control_tests PRIVATE aim_camera_stream)
   target_link_options(aim_uvc_control_tests PRIVATE "-Wl,--wrap=ioctl")
   add_test(NAME aim_uvc_control_regression COMMAND aim_uvc_control_tests)
-  add_executable(aim_camera_stream_tests test/test_camera_stream.cpp
-    src/input/uvc_stream.cpp src/app/camera/preview.cpp src/input/uvc_controls.cpp)
-  target_link_libraries(aim_camera_stream_tests PRIVATE opencv_core opencv_imgproc Threads::Threads)
-  target_include_directories(aim_camera_stream_tests PRIVATE ${OpenCV_INCLUDE_DIRS})
-  target_compile_options(aim_camera_stream_tests PRIVATE -Wall -Wextra -Wpedantic)
+  add_executable(aim_camera_stream_tests test/test_camera_stream.cpp src/app/camera/preview.cpp)
+  target_link_libraries(aim_camera_stream_tests PRIVATE aim_camera_stream opencv_imgproc)
   add_test(NAME aim_camera_stream_regression COMMAND aim_camera_stream_tests)
   set_tests_properties(aim_camera_stream_regression PROPERTIES TIMEOUT 20)
   add_executable(aim_navigation_tests test/test_navigation.cpp)
   target_link_libraries(aim_navigation_tests PRIVATE aim_navigation)
-  target_compile_options(aim_navigation_tests PRIVATE -Wall -Wextra -Wpedantic)
   add_test(NAME aim_navigation_regression COMMAND aim_navigation_tests)
   add_test(NAME aim_mission_demo COMMAND demo_mission_cpp)
   if(AIM_WITH_MAVLINK)
     add_executable(aim_mavlink_tests test/test_mavlink.cpp)
     target_include_directories(aim_mavlink_tests SYSTEM PRIVATE "${AIM_MAVLINK_INCLUDE_DIR}")
     target_link_libraries(aim_mavlink_tests PRIVATE aim_mavlink util)
-    target_compile_options(aim_mavlink_tests PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME aim_mavlink_regression COMMAND aim_mavlink_tests)
     add_test(NAME aim_localization_cli_help COMMAND px4_localization_cpp --help)
   endif()
   add_executable(aim_core_tests test/test_aim.cpp)
   target_link_libraries(aim_core_tests PRIVATE aim_core aim_detector aim_input opencv_imgcodecs)
-  target_compile_options(aim_core_tests PRIVATE -Wall -Wextra -Wpedantic)
   add_test(NAME aim_core_regression COMMAND aim_core_tests ${CMAKE_CURRENT_SOURCE_DIR}/config/aim.yaml)
   add_test(NAME aim_cli_help COMMAND demo_aim_cpp --help)
 endif()
+
+# 统一设置本项目目标的警告；可选程序或关闭测试时跳过不存在的目标。
+foreach(target
+    aim_observation aim_flight_state aim_core aim_detector aim_input aim_app
+    aim_camera_stream aim_uvc_worker aim_light_bars aim_armor_auto aim_armor_output
+    aim_depth_plane aim_depth_output aim_navigation aim_mavlink
+    demo_aim_cpp camera_light_test armor_auto astra_live_measure
+    demo_mission_cpp px4_localization_cpp
+    aim_app_output_tests aim_armor_snapshot_tests aim_armor_auto_tests aim_depth_plane_tests
+    aim_light_bar_tests aim_uvc_control_tests aim_camera_stream_tests
+    aim_navigation_tests aim_mavlink_tests aim_core_tests)
+  if(TARGET ${target})
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endforeach()
 # 可选安装规则：复制程序和默认配置，不自动安装模型权重。
 install(TARGETS demo_aim_cpp demo_mission_cpp camera_light_test armor_auto RUNTIME DESTINATION bin)
 install(FILES config/aim.yaml config/light_bars.yaml config/armor_auto.yaml config/astra_light_bars.yaml DESTINATION share/no_demo_aim)

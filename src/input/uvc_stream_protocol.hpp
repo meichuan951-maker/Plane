@@ -5,6 +5,12 @@
 
 namespace aim {
 // Linux 进程间协议，仅在摄像头应用内部使用。
+inline constexpr int kStreamSharedFd = 198;
+inline constexpr int kStreamCommandFd = 199;
+inline constexpr int kStreamStarting = 0;
+inline constexpr int kStreamLive = 1;
+inline constexpr int kStreamFailed = 2;
+
 struct StreamControls {
   int available{0}, has_focus{0}, has_gain{0}, has_auto_focus{0};
   int focus_min{0}, focus_max{0}, focus_value{0};
@@ -16,8 +22,7 @@ struct StreamShared {
   std::uint64_t capacity{0}, sequence{0}, acknowledged{0};
   double frame_time{0};
   int frame_type{16}; // CV_8UC3；由发布方明确指定。
-  int width{0}, height{0}, stage{0},
-      command_ok{0}; // stage: 0=start, 1=live, 2=error
+  int width{0}, height{0}, stage{kStreamStarting}, command_ok{0};
   StreamControls controls;
   char message[256]{};
   // 紧接结构体的是 capacity 字节、frame_type 类型的紧凑像素数据。

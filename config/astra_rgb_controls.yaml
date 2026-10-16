@@ -1,0 +1,7 @@
+# Astra Pro 彩色 UVC 硬件控制；由 scripts/astra_armor_live.sh 启动时应用。
+# 本机相机拒绝标准 UVC 手动曝光/自动曝光请求，故没有 exposure 字段。
+# 背光补偿默认 1 会提亮画面；设为 0 可减轻灯条光晕，不能保证消除白芯。
+device: /dev/v4l/by-id/usb-Astra_Pro_HD_Camera_Astra_Pro_HD_Camera-video-index0
+controls:
+  backlight_compensation: 0 # 本机驱动范围 0..3；不是曝光时间。
+  # brightness: 0          # 本机范围 -64..64；调暗显示不能恢复已饱和细节。

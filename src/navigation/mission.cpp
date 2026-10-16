@@ -63,6 +63,7 @@ void MissionMachine::reset() {
   last_now_ = -1;
   epoch_ = 0;
   route_index_ = 0;
+  airborne_seen_ = false;
   target_id_.reset();
   approach_point_.reset();
 }
@@ -94,16 +95,11 @@ MissionIntent MissionMachine::step(const MissionInput &i) {
   };
   bool valid_pose = i.vehicle_map.valid && i.vehicle_map.odom_frame == "map" &&
                     i.vehicle_map.time_domain == config_.time_domain &&
-                    i.vehicle_map.epoch > 0 &&
                     fresh(i.vehicle_map.capture_s, config_.max_pose_age_s) &&
-                    std::isfinite(i.vehicle_map.received_s) &&
-                    i.vehicle_map.received_s >= i.vehicle_map.capture_s &&
                     i.vehicle_map.received_s <= i.now &&
-                    std::isfinite(i.vehicle_map.time_error_s) &&
-                    i.vehicle_map.time_error_s >= 0 &&
                     i.vehicle_map.time_error_s <= .01;
   try {
-    i.vehicle_map.odomFromBody();
+    i.vehicle_map.validate();
   } catch (const std::invalid_argument &) {
     valid_pose = false;
   }
@@ -117,6 +113,12 @@ MissionIntent MissionMachine::step(const MissionInput &i) {
                                         : abort("flight_state_unhealthy");
   if (phase_ != MissionPhase::Idle && i.vehicle_map.epoch != epoch_)
     return abort("localization_reset");
+  // 起飞后意外落地必须锁存中止，不能继续接近、接触或自动再次起飞。
+  if (phase_ != MissionPhase::Idle && !i.landed)
+    airborne_seen_ = true;
+  if (i.landed && airborne_seen_ && phase_ != MissionPhase::Idle &&
+      phase_ != MissionPhase::Land)
+    return abort("unexpected_landing");
   const auto &position = i.vehicle_map.position_m;
   auto reached = [&](const cv::Vec3d &p) {
     return cv::norm(position - p) <= config_.reach_tolerance_m;

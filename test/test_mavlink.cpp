@@ -66,13 +66,22 @@ struct Fixture {
     }
     check(link.diagnostics(10.403).clock_ready, "time sync did not converge");
   }
-  mavlink_message_t heartbeat(int sys = 1) {
+  mavlink_message_t heartbeat(int sys = 1,
+                              int autopilot = MAV_AUTOPILOT_PX4) {
     mavlink_heartbeat_t h{};
-    h.autopilot = MAV_AUTOPILOT_PX4;
+    h.autopilot = autopilot;
     h.type = MAV_TYPE_QUADROTOR;
     mavlink_message_t m{};
     mavlink_msg_heartbeat_encode_status(sys, 1, &tx, &m, &h);
     return m;
+  }
+  void localPosition(double host, double received, float x = 1) {
+    mavlink_local_position_ned_t p{};
+    p.time_boot_ms = std::llround((host - 9) * 1000);
+    p.x = x;
+    mavlink_message_t m{};
+    mavlink_msg_local_position_ned_encode_status(1, 1, &tx, &m, &p);
+    send(m, received);
   }
   void health(double now = 10.41, std::uint16_t flags = 47) {
     mavlink_estimator_status_t e{};
@@ -283,6 +292,68 @@ int main() {
     auto o = f.odom(10.1);
     check(!f.pose(o, 10.455).valid, "stale remote sample");
   });
+  run("cached local position expires by remote sample age", [] {
+    Fixture f;
+    f.ready();
+    f.health(10.60);
+    // Arrives 160 ms after sampling: only 40 ms of the 200 ms budget remains.
+    f.localPosition(10.45, 10.61);
+    const auto current = f.link.flightState(10.64);
+    check(current.local_position && current.local_position->value.xy_valid &&
+              current.local_position->value.z_valid &&
+              current.local_position->value.velocity_valid,
+          "current delayed position rejected");
+    const auto stale = f.link.flightState(10.66);
+    check(stale.local_position && !stale.local_position->value.xy_valid &&
+              !stale.local_position->value.z_valid &&
+              !stale.local_position->value.velocity_valid,
+          "receive time extended remote sample validity");
+    check(f.link.diagnostics(10.66).clock_ready &&
+              f.link.diagnostics(10.66).estimator_ready,
+          "position expiry altered clock/estimator readiness");
+  });
+  run("local position requires a current PX4 heartbeat", [] {
+    auto invalid = [](const aim::FlightStateSnapshot &state) {
+      check(state.local_position && !state.local_position->value.xy_valid &&
+                !state.local_position->value.z_valid &&
+                !state.local_position->value.velocity_valid,
+            "position valid without a current PX4 heartbeat");
+    };
+    Fixture missing;
+    missing.sync();
+    missing.health();
+    missing.localPosition(10.42, 10.425);
+    invalid(missing.link.flightState(10.43));
+    check(!missing.link.diagnostics(10.43).estimator_ready,
+          "missing heartbeat became estimator ready");
+
+    Fixture foreign_autopilot;
+    foreign_autopilot.sync();
+    foreign_autopilot.send(
+        foreign_autopilot.heartbeat(1, MAV_AUTOPILOT_ARDUPILOTMEGA), 10.405);
+    foreign_autopilot.health();
+    foreign_autopilot.localPosition(10.42, 10.425);
+    invalid(foreign_autopilot.link.flightState(10.43));
+
+    Fixture expired;
+    expired.ready();
+    // Refresh the estimator and position without refreshing the heartbeat.
+    expired.health(11.38);
+    expired.localPosition(11.39, 11.395);
+    check(expired.link.flightState(11.40).local_position->value.xy_valid,
+          "fresh PX4 heartbeat rejected");
+    invalid(expired.link.flightState(11.41));
+    check(!expired.link.diagnostics(11.41).estimator_ready,
+          "expired heartbeat became estimator ready");
+
+    Fixture changed;
+    changed.ready();
+    changed.localPosition(10.44, 10.445);
+    check(changed.link.flightState(10.45).local_position->value.xy_valid,
+          "initial PX4 position rejected");
+    changed.send(changed.heartbeat(1, MAV_AUTOPILOT_ARDUPILOTMEGA), 10.46);
+    invalid(changed.link.flightState(10.47));
+  });
   run("EKF reset changes epoch and requires new health", [] {
     Fixture f;
     f.ready();
@@ -296,6 +367,41 @@ int main() {
     o.reset_counter = 1;
     const auto c = f.pose(o, 10.555);
     check(c.valid && c.epoch == b.epoch, "new epoch revalidates");
+  });
+  run("new estimator health cannot revive a previous epoch position", [] {
+    Fixture f;
+    f.ready();
+    f.localPosition(10.44, 10.445, 123);
+    const auto before = f.pose(f.odom());
+    check(before.valid, "initial pose rejected");
+    auto o = f.odom(10.5);
+    o.reset_counter = 1;
+    const auto reset = f.pose(o, 10.505);
+    check(reset.epoch > before.epoch, "missing EKF epoch change");
+    f.health(10.52);
+    const auto old = f.link.flightState(10.525);
+    check(old.heartbeat && old.local_position &&
+              old.local_position->value.position_ned_m[0] == 123 &&
+              !old.local_position->value.xy_valid &&
+              !old.local_position->value.z_valid &&
+              !old.local_position->value.velocity_valid,
+          "new estimator health revived an old epoch position");
+    check(f.link.diagnostics(10.525).estimator_ready,
+          "EKF reset discarded the current heartbeat");
+    // A rejected duplicate must not assign the new epoch to the old cache.
+    f.localPosition(10.44, 10.526, 999);
+    const auto duplicate = f.link.flightState(10.527);
+    check(duplicate.local_position &&
+              duplicate.local_position->value.position_ned_m[0] == 123 &&
+              !duplicate.local_position->value.xy_valid,
+          "duplicate packet relabeled the previous epoch cache");
+    f.localPosition(10.53, 10.535, 456);
+    const auto fresh = f.link.flightState(10.54);
+    check(fresh.local_position && fresh.local_position->value.xy_valid &&
+              fresh.local_position->value.z_valid &&
+              fresh.local_position->value.velocity_valid &&
+              fresh.local_position->value.position_ned_m[0] == 456,
+          "new epoch local position failed to recover");
   });
   run("boot reversal latches reset until explicit new session", [] {
     Fixture f;

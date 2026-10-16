@@ -14,6 +14,9 @@ struct PoseSample {
   std::optional<cv::Vec3d> velocity_odom_mps;
   bool valid{false};
   std::string reason{"uninitialized"};
+  // 检查元数据、坐标和可选速度的完整性；时效/误差上限由消费者决定。
+  // valid 是上游状态，调用方仍须独立检查，不把合法数据等同于定位健康。
+  void validate() const;
   RigidTransform odomFromBody() const;
   Json json() const;
 };

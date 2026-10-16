@@ -1,5 +1,6 @@
 // 命令行解析实现；保持参数错误尽早暴露，避免启动设备后才发现配置无效。
 #include "options.hpp"
+#include "common/parse.hpp"
 #include <iostream>
 #include <stdexcept>
 namespace aim::app {
@@ -7,7 +8,8 @@ namespace aim::app {
 void help() {
   std::cout
       << "C++ armor observation (no flight control)\n"
-         "--source synthetic|synthetic-rgb|replay|realsense --config config/aim.yaml\n"
+         "--source synthetic|synthetic-rgb|replay|realsense --config "
+         "config/aim.yaml\n"
          "--weights model.onnx --num-classes N --input-size 640\n"
          "--manifest replay.json --serial SERIAL --frames N (0=continuous "
          "camera)\n"
@@ -24,14 +26,6 @@ void help() {
 #else
          "ROS 2: disabled (configure -DAIM_WITH_ROS2=ON)\n";
 #endif
-}
-// 要求整个字符串都是整数，拒绝诸如 60abc 的部分解析结果。
-static int integer(const std::string &s) {
-  std::size_t consumed = 0;
-  const int value = std::stoi(s, &consumed);
-  if (consumed != s.size())
-    throw std::invalid_argument("Expected integer: " + s);
-  return value;
 }
 // 先读取键值和布尔开关，再统一校验数据源、帧数、线程和模型约束。
 Args parse(int argc, char **argv) {
@@ -64,19 +58,19 @@ Args parse(int argc, char **argv) {
     else if (key == "--preview-dir")
       a.preview = value;
     else if (key == "--frames")
-      a.frames = integer(value);
+      a.frames = parseInteger(value, "Expected integer: ");
     else if (key == "--num-classes")
-      a.classes = integer(value);
+      a.classes = parseInteger(value, "Expected integer: ");
     else if (key == "--input-size")
-      a.input_size = integer(value);
+      a.input_size = parseInteger(value, "Expected integer: ");
     else if (key == "--threads")
-      a.threads = integer(value);
+      a.threads = parseInteger(value, "Expected integer: ");
     else
       throw std::invalid_argument("Unknown argument: " + key);
   }
-// 组合校验：不同数据源的必需参数不同，回放的虚拟时间不能用于实时 ROS 输出。
-  if (a.source != "synthetic" && a.source != "synthetic-rgb" && a.source != "replay" &&
-      a.source != "realsense")
+  // 组合校验：不同数据源的必需参数不同，回放的虚拟时间不能用于实时 ROS 输出。
+  if (a.source != "synthetic" && a.source != "synthetic-rgb" &&
+      a.source != "replay" && a.source != "realsense")
     throw std::invalid_argument("Unknown source");
   if (a.frames < 0 || a.frames > 1000000 ||
       (a.frames == 0 && a.source != "realsense"))
@@ -85,7 +79,8 @@ Args parse(int argc, char **argv) {
     throw std::invalid_argument("threads must be 1..16");
   if (a.source == "realsense" && a.weights.empty())
     throw std::invalid_argument("Camera input requires custom .onnx weights");
-  if (!a.weights.empty() && (a.classes < 1 || (a.source == "synthetic" || a.source == "synthetic-rgb")))
+  if (!a.weights.empty() && (a.classes < 1 || (a.source == "synthetic" ||
+                                               a.source == "synthetic-rgb")))
     throw std::invalid_argument(
         "Weights require model --num-classes and replay/realsense input");
   if (a.source == "replay" && a.manifest.empty())

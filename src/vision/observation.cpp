@@ -1,13 +1,14 @@
 // schema=2 输出编码；JSONL/ROS 共享，未提供的量输出 null。
 #include "demo_aim/observation.hpp"
-#include <cmath>
 #include <chrono>
+#include <cmath>
 #include <stdexcept>
 namespace aim {
 // 校验图像尺寸、焦距和内参数值，非法输入抛出异常。
 void Intrinsics::validate() const {
   if (width <= 0 || height <= 0 || fx <= 0 || fy <= 0 ||
-      (!std::isfinite(fx) || !std::isfinite(fy) || !std::isfinite(cx) || !std::isfinite(cy)))
+      (!std::isfinite(fx) || !std::isfinite(fy) || !std::isfinite(cx) ||
+       !std::isfinite(cy)))
     throw std::invalid_argument("Invalid camera intrinsics");
 }
 // 针孔反投影：X=(u-cx)Z/fx，Y=(v-cy)Z/fy；Z 是轴向深度而非欧氏距离。
@@ -15,13 +16,16 @@ cv::Vec3d Intrinsics::deproject(double u, double v, double z) const {
   return {(u - cx) * z / fx, (v - cy) * z / fy, z};
 }
 // 使用采集时刻而非发布时刻判断年龄，避免把旧图像的新消息当成新观测。
-bool isDetectionCurrent(const Solution &s,double now,double max_age,const std::string &domain) {
-  const double age=now-s.capture_s;
-  return s.detection_valid && s.time_domain==domain && std::isfinite(age) &&
-         age>=0 && std::isfinite(max_age) && max_age>0 && age<=max_age;
+bool isDetectionCurrent(const Solution &s, double now, double max_age,
+                        const std::string &domain) {
+  const double age = now - s.capture_s;
+  return s.detection_valid && s.time_domain == domain && std::isfinite(age) &&
+         age >= 0 && std::isfinite(max_age) && max_age > 0 && age <= max_age;
 }
-bool isCurrent(const Solution &s,double now,double max_age,const std::string &domain) {
-  return s.valid && s.position_valid && isDetectionCurrent(s,now,max_age,domain);
+bool isCurrent(const Solution &s, double now, double max_age,
+               const std::string &domain) {
+  return s.valid && s.position_valid &&
+         isDetectionCurrent(s, now, max_age, domain);
 }
 // 单调时钟用于本机时效判断，避免系统时间校正使年龄跳变。
 double monotonicNow() {

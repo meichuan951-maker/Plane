@@ -1,6 +1,6 @@
 // 输入适配公共接口：三种数据源最终提供一致的 Frame 与 Detection。
 #pragma once
-#include "demo_aim/core.hpp"
+#include "demo_aim/observation.hpp"
 #include <filesystem>
 #include <memory>
 namespace aim {
@@ -16,7 +16,7 @@ Sample synthetic(std::uint64_t sequence);
 class Replay {
 public:
   explicit Replay(const std::string &path);
-// 读取下一帧并覆盖 sample；到清单末尾返回 false，损坏文件抛异常。
+  // 读取下一帧并覆盖 sample；到清单末尾返回 false，损坏文件抛异常。
   bool next(Sample &sample);
 
 private:
@@ -34,11 +34,11 @@ public:
   ~RealSense();
   RealSense(const RealSense &) = delete;
   RealSense &operator=(const RealSense &) = delete;
-// 等待、同步并对齐一组 RGB-D；返回的图像拥有独立内存。
+  // 等待、同步并对齐一组 RGB-D；返回的图像拥有独立内存。
   Frame read();
 
 private:
-// 通过不完整类型隐藏 SDK，包含本头文件的调用方不需要知道 rs2 类型。
+  // 通过不完整类型隐藏 SDK，包含本头文件的调用方不需要知道 rs2 类型。
   struct Impl;
   std::unique_ptr<Impl> impl_;
 };

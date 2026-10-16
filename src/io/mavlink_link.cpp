@@ -44,6 +44,10 @@ struct MavlinkLink::Impl {
   std::optional<std::uint64_t> last_odom_us;
   std::optional<std::uint8_t> reset_counter;
   std::optional<int> parent_frame, velocity_frame;
+  // LOCAL_POSITION_NED 没有 reset_counter，只能记录接收时已知的 epoch。
+  // EKF/父坐标重置后必须收到新位置，不能用新健康状态重新激活旧缓存；
+  // 这不能识别所有在网络中迟到的重置前报文。
+  std::uint64_t local_position_epoch{};
   double estimator_received{}, last_feed{-1};
   int autopilot{-1}, sync_samples{};
   double offset{}, sync_error{}, last_sync{-1};
@@ -78,6 +82,10 @@ struct MavlinkLink::Impl {
     return (estimator->flags & needed) == needed &&
            !(estimator->flags &
              (ESTIMATOR_CONST_POS_MODE | ESTIMATOR_ACCEL_ERROR));
+  }
+  bool estimatorReady(double now) const {
+    return healthy(now) && flight.snapshot(now).heartbeat.has_value() &&
+           autopilot == MAV_AUTOPILOT_PX4;
   }
   std::vector<std::uint8_t> encode(mavlink_message_t &m) {
     std::vector<std::uint8_t> bytes(MAVLINK_MAX_PACKET_LEN);
@@ -316,15 +324,16 @@ std::vector<PoseSample> MavlinkLink::feed(const std::uint8_t *data,
       mavlink_local_position_ned_t p{};
       mavlink_msg_local_position_ned_decode(&m, &p);
       const bool valid =
-          s.healthy(now) &&
+          s.estimatorReady(now) &&
           s.hostTime(static_cast<std::uint64_t>(p.time_boot_ms) * 1000, now,
                      s.config.max_pose_age_s)
               .has_value();
       try {
-        s.flight.updateLocalPosition(
-            m.sysid, m.compid,
-            {{p.x, p.y, p.z}, {p.vx, p.vy, p.vz}, valid, valid, valid},
-            {now, p.time_boot_ms});
+        if (s.flight.updateLocalPosition(
+                m.sysid, m.compid,
+                {{p.x, p.y, p.z}, {p.vx, p.vy, p.vz}, valid, valid, valid},
+                {now, p.time_boot_ms}))
+          s.local_position_epoch = s.diag.epoch;
       } catch (const std::invalid_argument &) {
         ++s.diag.bad_frames;
       }
@@ -368,10 +377,22 @@ std::vector<std::uint8_t> MavlinkLink::timesyncProbe(double now) {
 }
 FlightStateSnapshot MavlinkLink::flightState(double now) const {
   auto snapshot = impl_->flight.snapshot(now);
-  if (snapshot.local_position && !impl_->healthy(now)) {
-    snapshot.local_position->value.xy_valid = false;
-    snapshot.local_position->value.z_valid = false;
-    snapshot.local_position->value.velocity_valid = false;
+  if (snapshot.local_position) {
+    auto &position = *snapshot.local_position;
+    // 缓存按接收时间超时，位置有效性还必须按远端采样时间检查；
+    // 延迟到达的样本不能在接收后再获得完整的一段有效期。
+    const bool current =
+        impl_->estimatorReady(now) &&
+        impl_->local_position_epoch == impl_->diag.epoch &&
+        position.stamp.remote_boot_ms &&
+        impl_->hostTime(*position.stamp.remote_boot_ms * 1000, now,
+                        impl_->config.max_pose_age_s)
+            .has_value();
+    if (!current) {
+      position.value.xy_valid = false;
+      position.value.z_valid = false;
+      position.value.velocity_valid = false;
+    }
   }
   return snapshot;
 }
@@ -380,9 +401,7 @@ LinkDiagnostics MavlinkLink::diagnostics(double now) const {
     throw std::invalid_argument("Invalid diagnostic time");
   auto d = impl_->diag;
   d.clock_ready = impl_->clockReady(now);
-  d.estimator_ready = impl_->healthy(now) &&
-                      impl_->flight.snapshot(now).heartbeat.has_value() &&
-                      impl_->autopilot == MAV_AUTOPILOT_PX4;
+  d.estimator_ready = impl_->estimatorReady(now);
   d.odometry_frame_id = impl_->parent_frame;
   d.velocity_frame_id = impl_->velocity_frame;
   d.clock_error_s = impl_->sync_error;

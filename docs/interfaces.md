@@ -6,14 +6,27 @@
 ## 模块与依赖
 
 - `src/vision/`：core.cpp 处理观测确认/可选测距，observation.cpp 序列化，yolo.cpp 处理 ONNX 检测。
-- `src/input/`：合成、PNG 回放和可选 RealSense 采集。
+- `src/input/`：合成、PNG 回放、可选 RealSense，以及 UVC/深度采集进程与控制。
 - `src/navigation/`：geometry.cpp 刚体变换，localization.cpp 位姿历史和世界目标，mission.cpp 任务决策。
 - `src/io/`：flight_state.cpp 遥测缓存，mavlink_link.cpp 协议与同步，serial_port.cpp Linux UART。
-- `src/app/`：三个程序入口、视觉循环、参数、日志与可选 ROS 输出。
+- `src/app/`：程序入口、标定、日志与可选 ROS 输出；`camera/`、`armor_auto/`、`depth/`
+  各自组织参数、循环和预览，`common/` 复用严格整数解析与 FPS 统计。
 
-`aim_core` 提供观测/几何基础和传输无关的遥测类型；`aim_detector`、`aim_input`、
-`aim_navigation` 依赖核心；`aim_mavlink` 依赖导航；应用负责装配。
-核心不链接 DNN、相机 SDK 或 ROS。实际目标列表集中在根 `CMakeLists.txt`，不再创建空 ROS 包目录。
+`aim_observation` 提供观测数据契约与序列化，`aim_flight_state` 提供遥测缓存。
+`aim_core` 保留视觉流水线及对这两个库的公共依赖，现有视觉调用者仍可链接它。
+`aim_input` 和 `aim_navigation` 直接依赖观测契约；`aim_detector` 使用核心配置与 IoU；
+`aim_mavlink` 依赖导航和遥测缓存，应用负责装配。
+
+`aim_camera_stream` 集中构建共享帧、进程监管与 UVC 控制；RGB 程序额外链接 `aim_uvc_worker`，
+Astra 保留专用深度 worker。内部共享内存文件描述符和流状态常量定义在 `uvc_stream_protocol.hpp`。
+`aim_armor_output`、`aim_depth_output` 分别供各自应用与无硬件输出回归使用；两套坐标和有效性契约保持独立。
+核心与导航不链接 DNN、相机 SDK 或 ROS。实际目标列表集中在根 `CMakeLists.txt`。
+
+自动装甲和深度预览在耗时处理结束后取得时间/帧龄快照，JSON 和预览使用同一快照。
+帧龄非有限、负值、超过 250 ms，或采集失败/缺帧时，输出测量无效且距离/角度为 `null`。
+停止记录清空测量值与观测时刻，消费端仍须独立检查时效，避免沿用停止前的最后有效记录。
+自动装甲退出保存截图时，重新用最后原图、对应检测和刷新后的时效状态生成叠加图，不复用限频窗口缓存。
+过期/故障时仍保存原图用于诊断，叠加图显示无效状态；已有截图目录拒绝覆盖。
 
 公共接口位于 `include/demo_aim/`，应用私有头文件留在 `src/app/`。
 `Pipeline`、`PoseHistory`、`FlightStateCache`、`MavlinkLink`、`MissionMachine` 均按单线程串行访问设计。
@@ -200,6 +213,11 @@ TIMESYNC 通过往返时间估计飞控到本机的时钟偏移：至少 5 次�
 不外推，不跨定位失效、时钟域、坐标名或 epoch 插值。图像太新、尚无后一帧位姿时返回 `pose_not_bracketed`，
 集成进程应有界等待后一帧或丢弃图像，不能拿最新姿态替代。
 
+`PoseSample::validate()` 统一检查非负有限时间、接收不早于采集、非空时钟域/坐标系、正 epoch、
+有限的可选速度及合法刚体姿态；`PoseHistory`、`poseInMap()` 与任务入口复用它。
+该方法检查完整性，不证明定位健康或新鲜：上游 `valid`、当前时效、最大时钟误差仍须分别检查。
+`poseInMap()` 不把非法元数据变成有效地图位姿；坐标映射本身不强加历史/任务各自的时间误差阈值。
+
 `reset_counter` 或参考坐标变化会增加 epoch，使 `WorldCalibration.epoch` 不匹配、旧世界坐标失效。
 时间大幅倒退会锁定 `reset_required`。epoch 仅在当前接收器进程会话内使用，不能把旧进程的 epoch=1
 和新进程的 epoch=1 当成同一个原点；每次启动/重连必须重新确认 `map_T_odom`，不持久化“已对齐”状态。
@@ -221,8 +239,9 @@ auto vehicle = aim::poseInMap(current_pose, calibration);
 ```
 
 这段展示接口组合，线程共享 history 需要加锁或由单一事件循环串行访问。
-`projectTargetToMap()` 不从像素框估计距离。当前纯彩色路径没有 PnP，仍只能输出二维/视线；
-8～10 m 目标的有效三维观测、已知几何关键点与相机标定仍需要独立实现/验证。
+`projectTargetToMap()` 不从像素框估计距离。`demo_aim_cpp` 的纯彩色观测路径没有 PnP，仍只能输出二维/视线；
+独立 `armor_auto` 已有基于标定和已知灯条尺寸的 PnP，但尚未接入此世界坐标流水线。
+8～10 m 目标的有效三维观测、目标几何对应与实机标定仍需验证。
 旧 RGB-D 管线默认深度阈值也不是 10 m 的有效测距保证。
 输出世界目标协方差仍为 null，未把 YOLO 置信度或 PX4 自身协方差冒充完整目标误差。
 
@@ -235,6 +254,8 @@ auto vehicle = aim::poseInMap(current_pose, calibration);
 它会检查时间、定位 epoch、目标身份、超时与健康；终止/完成状态锁存，须显式 reset 才能开始新任务。
 目标丢失不等于接触成功；恢复/返航也要求定位和飞行健康仍可靠。
 定位无效时输出中止/交接意图，不能假设一定有能力自动悬停或返航。
+曾离地后在非 `land` 阶段收到新鲜的已着陆状态，会锁存 `abort / unexpected_landing`，
+包括起飞爬升途中落回地面的情况；不会继续接近、请求接触或自动再次起飞。
 
 接近阶段输出距离目标一定距离的站位点；到位后仅请求未来的接触控制器，
 没有写入高速撞击轨迹、加速度控制律或机体碰撞后的自动恢复控制器。
@@ -259,6 +280,9 @@ MicoVIO 原始定位已经送入 PX4 后，香橙派不将 PX4 融合结果再�
 
 姿态、位置和心跳是独立超时的缓存；导航插值使用经过时间同步与估计器质量检查的 ODOMETRY。
 定位质量未知、协方差无效/过大、估计器健康失效、时钟异常都不能静默输出有效位置。
+`LOCAL_POSITION_NED` 的有效标志还要求当前 PX4 心跳，按远端采样时刻而非仅接收时刻复查帧龄。
+定位 epoch 改变后，之前接收的位置只保留为无效诊断，必须收到新位置才能恢复；新的健康报文或被拒收的重复位置包不能激活旧缓存。
+该报文本身不含 reset_counter，接收端不能识别所有网络中迟到的重置前数据，导航仍使用有明确重置语义的 ODOMETRY。
 `PoseHistory` 默认最多 256 点/2 s，不跨失效间隙插值。
 
 后续飞控执行器还需定义唯一控制出口、命令截止时间、控制模式确认和失效交接。

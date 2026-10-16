@@ -3,6 +3,15 @@
 #include <cmath>
 #include <stdexcept>
 namespace aim {
+void PoseSample::validate() const {
+  if (!std::isfinite(capture_s) || capture_s < 0 ||
+      !std::isfinite(received_s) || received_s < capture_s ||
+      !std::isfinite(time_error_s) || time_error_s < 0 || time_domain.empty() ||
+      odom_frame.empty() || !epoch ||
+      (velocity_odom_mps && !finiteVector(*velocity_odom_mps)))
+    throw std::invalid_argument("Invalid pose metadata or velocity");
+  odomFromBody();
+}
 RigidTransform PoseSample::odomFromBody() const {
   RigidTransform t{quaternionRotation(body_flu_to_odom_wxyz), position_m};
   t.validate();
@@ -48,17 +57,12 @@ bool PoseHistory::push(const PoseSample &s) {
     return false;
   }
   try {
-    s.odomFromBody();
+    s.validate();
   } catch (const std::invalid_argument &) {
     clear();
     return false;
   }
-  if (!std::isfinite(s.capture_s) || s.capture_s < 0 ||
-      !std::isfinite(s.received_s) || s.received_s < s.capture_s ||
-      !std::isfinite(s.time_error_s) || s.time_error_s < 0 ||
-      s.time_error_s > config_.max_time_error_s || s.time_domain.empty() ||
-      s.odom_frame.empty() || !s.epoch ||
-      (s.velocity_odom_mps && !finiteVector(*s.velocity_odom_mps))) {
+  if (s.time_error_s > config_.max_time_error_s) {
     clear();
     return false;
   }
@@ -116,12 +120,19 @@ PoseSample poseInMap(const PoseSample &pose, const WorldCalibration &c) {
       pose.odom_frame != c.odom_frame)
     return out;
   try {
+    pose.validate();
+  } catch (const std::invalid_argument &) {
+    out.reason = "invalid_pose";
+    return out;
+  }
+  try {
     const auto t = *c.map_T_odom * pose.odomFromBody();
     out.position_m = t.translation;
     out.body_flu_to_odom_wxyz = rotationQuaternion(t.rotation);
     if (pose.velocity_odom_mps)
       out.velocity_odom_mps = c.map_T_odom->rotation * *pose.velocity_odom_mps;
     out.odom_frame = "map";
+    out.validate();
     out.valid = true;
     out.reason = "ok";
   } catch (const std::invalid_argument &) {
