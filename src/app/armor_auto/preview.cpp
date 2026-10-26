@@ -1,4 +1,4 @@
-#include "preview.hpp"
+#include "demo_aim/detail/app/armor_auto/preview.hpp"
 #include <filesystem>
 #include <iomanip>
 #include <opencv2/imgcodecs.hpp>

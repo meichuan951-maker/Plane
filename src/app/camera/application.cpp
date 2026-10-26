@@ -1,9 +1,9 @@
 // 普通 UVC 相机独立验收入口：预览/检测在主进程，取流/控制在受监控子进程。
-#include "application.hpp"
+#include "demo_aim/detail/app/camera/application.hpp"
 #include "demo_aim/light_bars.hpp"
-#include "options.hpp"
-#include "preview.hpp"
-#include "snapshot.hpp"
+#include "demo_aim/detail/app/camera/options.hpp"
+#include "demo_aim/detail/app/camera/preview.hpp"
+#include "demo_aim/detail/app/camera/snapshot.hpp"
 #include <chrono>
 #include <csignal>
 #include <cstdlib>

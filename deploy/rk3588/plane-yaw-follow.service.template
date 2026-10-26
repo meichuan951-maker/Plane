@@ -1,0 +1,21 @@
+[Unit]
+Description=RK3588 visual yaw follow with PX4
+After=local-fs.target
+RequiresMountsFor=@PROJECT_DIR@ @CONFIG_PATH@
+
+[Service]
+Type=exec
+User=@RUN_USER@
+SupplementaryGroups=video dialout
+WorkingDirectory=@PROJECT_DIR@
+ExecStart=@PYTHON_PATH@ -u -m px4_go.yaw_follow --config @CONFIG_PATH@
+Restart=no
+KillSignal=SIGTERM
+KillMode=mixed
+TimeoutStopSec=60
+UMask=0077
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

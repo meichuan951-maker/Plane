@@ -1,6 +1,6 @@
 // 命令行解析实现；保持参数错误尽早暴露，避免启动设备后才发现配置无效。
-#include "options.hpp"
-#include "common/parse.hpp"
+#include "demo_aim/detail/app/options.hpp"
+#include "demo_aim/detail/app/common/parse.hpp"
 #include <iostream>
 #include <stdexcept>
 namespace aim::app {
@@ -8,14 +8,14 @@ namespace aim::app {
 void help() {
   std::cout
       << "C++ armor observation (no flight control)\n"
-         "--source synthetic|synthetic-rgb|replay|realsense --config "
+         "--source synthetic|synthetic-rgb|realsense --config "
          "config/aim.yaml\n"
-         "--weights model.onnx --num-classes N --input-size 640\n"
-         "--manifest replay.json --serial SERIAL --frames N (0=continuous "
+         "--detector-config config/light_bars.yaml (live camera)\n"
+         "--serial SERIAL --frames N (0=continuous "
          "camera)\n"
          "--output FILE.jsonl --preview-dir NEW_DIR --show --ros --threads 2\n"
-         "Existing logs get a numbered filename suffix.\n"
-         "Backend: OpenCV DNN CPU; YOLOv8 detect raw output, nms=false.\n"
+         "Logs rotate at 10 MiB; keep current file plus 4 backups (.1-.4).\n"
+         "Detector: traditional red/blue light bar pairing.\n"
 #ifdef AIM_HAVE_REALSENSE
          "RealSense: compiled\n"
 #else
@@ -27,7 +27,7 @@ void help() {
          "ROS 2: disabled (configure -DAIM_WITH_ROS2=ON)\n";
 #endif
 }
-// 先读取键值和布尔开关，再统一校验数据源、帧数、线程和模型约束。
+// 先读取键值和布尔开关，再统一校验数据源、帧数和线程约束。
 Args parse(int argc, char **argv) {
   Args a;
   for (int i = 1; i < argc; ++i) {
@@ -47,10 +47,8 @@ Args parse(int argc, char **argv) {
       a.source = value;
     else if (key == "--config")
       a.config = value;
-    else if (key == "--weights")
-      a.weights = value;
-    else if (key == "--manifest")
-      a.manifest = value;
+    else if (key == "--detector-config")
+      a.detector_config = value;
     else if (key == "--serial")
       a.serial = value;
     else if (key == "--output")
@@ -59,35 +57,22 @@ Args parse(int argc, char **argv) {
       a.preview = value;
     else if (key == "--frames")
       a.frames = parseInteger(value, "Expected integer: ");
-    else if (key == "--num-classes")
-      a.classes = parseInteger(value, "Expected integer: ");
-    else if (key == "--input-size")
-      a.input_size = parseInteger(value, "Expected integer: ");
     else if (key == "--threads")
       a.threads = parseInteger(value, "Expected integer: ");
     else
       throw std::invalid_argument("Unknown argument: " + key);
   }
-  // 组合校验：不同数据源的必需参数不同，回放的虚拟时间不能用于实时 ROS 输出。
+  // 合成数据不能用于实时 ROS 输出。
   if (a.source != "synthetic" && a.source != "synthetic-rgb" &&
-      a.source != "replay" && a.source != "realsense")
+      a.source != "realsense")
     throw std::invalid_argument("Unknown source");
   if (a.frames < 0 || a.frames > 1000000 ||
       (a.frames == 0 && a.source != "realsense"))
     throw std::invalid_argument("Invalid frame count");
   if (a.threads < 1 || a.threads > 16)
     throw std::invalid_argument("threads must be 1..16");
-  if (a.source == "realsense" && a.weights.empty())
-    throw std::invalid_argument("Camera input requires custom .onnx weights");
-  if (!a.weights.empty() && (a.classes < 1 || (a.source == "synthetic" ||
-                                               a.source == "synthetic-rgb")))
-    throw std::invalid_argument(
-        "Weights require model --num-classes and replay/realsense input");
-  if (a.source == "replay" && a.manifest.empty())
-    throw std::invalid_argument("Replay requires --manifest");
   if (a.ros && a.source != "realsense")
-    throw std::invalid_argument(
-        "ROS output is camera only; replay has virtual time");
+    throw std::invalid_argument("ROS output is camera only");
   return a;
 }
 } // namespace aim::app

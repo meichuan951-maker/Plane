@@ -1,0 +1,36 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "no_demo: 合成视觉离线调试",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/demo_aim_cpp",
+      "args": [
+        "--source", "synthetic",
+        "--config", "config/aim.yaml",
+        "--frames", "60",
+        "--output", "runs/workspace/synthetic.jsonl"
+      ],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "no_demo: 调试构建（Debug，复用 build）",
+      "stopAtEntry": false,
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "miDebuggerPath": "gdb"
+    },
+    {
+      "name": "no_demo: 任务决策离线调试",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/demo_mission_cpp",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "no_demo: 调试构建（Debug，复用 build）",
+      "stopAtEntry": false,
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "miDebuggerPath": "gdb"
+    }
+  ]
+}

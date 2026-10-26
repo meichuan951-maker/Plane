@@ -1,10 +1,9 @@
-// 输入适配公共接口：三种数据源最终提供一致的 Frame 与 Detection。
+// 输入适配公共接口：合成数据与实时相机提供一致的 Frame。
 #pragma once
 #include "demo_aim/observation.hpp"
-#include <filesystem>
 #include <memory>
 namespace aim {
-// frame 是彩色帧，可选深度；detections 可为注入框或回放框；process_s 是该样本处理时刻。
+// frame 是彩色帧，可选深度；detections 由合成源注入或应用检测器填充；process_s 是处理时刻。
 struct Sample {
   Frame frame;
   std::vector<Detection> detections;
@@ -12,21 +11,6 @@ struct Sample {
 };
 // 生成确定性的离线测试帧，不执行真实目标检测。
 Sample synthetic(std::uint64_t sequence);
-// schema=2 为 RGB-D；schema=3 允许省略内参/深度，路径相对于清单。
-class Replay {
-public:
-  explicit Replay(const std::string &path);
-  // 读取下一帧并覆盖 sample；到清单末尾返回 false，损坏文件抛异常。
-  bool next(Sample &sample);
-
-private:
-  std::filesystem::path directory_;
-  Json manifest_;
-  Intrinsics intrinsics_;
-  double depth_scale_{};
-  bool legacy_{true}, rectified_{false};
-  std::size_t index_{0};
-};
 // 持有相机资源的 RAII 类；禁止复制，析构时停止采集。
 class RealSense {
 public:

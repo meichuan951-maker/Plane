@@ -1,5 +1,5 @@
 // ROS 2 发布器实现；编译禁用时构造会明确报错，不静默忽略 --ros。
-#include "ros_output.hpp"
+#include "demo_aim/detail/app/ros_output.hpp"
 #include <stdexcept>
 #ifdef AIM_HAVE_ROS2
 #include <rclcpp/rclcpp.hpp>

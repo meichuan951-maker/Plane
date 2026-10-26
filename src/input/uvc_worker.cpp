@@ -1,5 +1,6 @@
-#include "uvc_stream.hpp"
-#include "uvc_stream_protocol.hpp"
+#include "demo_aim/detail/input/uvc_stream.hpp"
+#include "demo_aim/detail/input/uvc_stream_protocol.hpp"
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <iostream>
@@ -70,16 +71,30 @@ int cameraWorkerMain(int argc, char **argv) {
     set(cv::CAP_PROP_FOURCC,
         cv::VideoWriter::fourcc(format[0], format[1], format[2], format[3]),
         "format");
-    set(cv::CAP_PROP_FRAME_WIDTH, std::stoi(argv[3]), "width");
-    set(cv::CAP_PROP_FRAME_HEIGHT, std::stoi(argv[4]), "height");
-    set(cv::CAP_PROP_FPS, std::stoi(argv[5]), "fps");
+    const int requested_width = std::stoi(argv[3]);
+    const int requested_height = std::stoi(argv[4]);
+    const int requested_fps = std::stoi(argv[5]);
+    set(cv::CAP_PROP_FRAME_WIDTH, requested_width, "width");
+    set(cv::CAP_PROP_FRAME_HEIGHT, requested_height, "height");
+    set(cv::CAP_PROP_FPS, requested_fps, "fps");
     set(cv::CAP_PROP_BUFFERSIZE, 1, "buffer size");
+    const double driver_fps = camera.get(cv::CAP_PROP_FPS);
     const std::string description =
-        std::string(argv[2]) + ", V4L2, negotiated " +
+        std::string(argv[2]) + ", V4L2, requested " +
+        std::to_string(requested_width) + "x" +
+        std::to_string(requested_height) + " " + format + " at " +
+        std::to_string(requested_fps) + " FPS; negotiated " +
         std::to_string(int(camera.get(cv::CAP_PROP_FRAME_WIDTH))) + "x" +
         std::to_string(int(camera.get(cv::CAP_PROP_FRAME_HEIGHT))) +
-        ", driver FPS " + std::to_string(camera.get(cv::CAP_PROP_FPS)) +
-        " (not measured)";
+        ", driver FPS " + std::to_string(driver_fps) + " (not measured)";
+    std::cerr << "Camera stream: " << description << '\n';
+    if (!std::isfinite(driver_fps) || driver_fps <= 0)
+      std::cerr << "Warning: camera did not report a valid negotiated FPS; "
+                   "measure fresh frames to verify throughput\n";
+    else if (driver_fps + 0.5 < requested_fps)
+      std::cerr << "Warning: requested " << requested_fps
+                << " FPS, but camera negotiated " << driver_fps
+                << " FPS; the requested frame rate was not accepted\n";
     CameraControls controls;
     bool controls_checked = std::string(argv[7]) != "1";
     double restore_exposure_at = 0;

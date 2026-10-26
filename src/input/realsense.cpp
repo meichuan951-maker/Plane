@@ -85,7 +85,7 @@ Frame RealSense::read() {
   f.clock_valid = clock;
   f.received_s = now;
   f.sequence = impl_->sequence++;
-  f.source = "d435i_yolov8_onnx_cpp";
+  f.source = "d435i_light_bars_cpp";
 // 捕获本帧内参，通过 SDK 反投影处理支持的畸变模型。
   f.deproject = [k](double u, double v, double z) {
     float point[3], pixel[2] = {static_cast<float>(u), static_cast<float>(v)};

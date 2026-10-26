@@ -1,0 +1,121 @@
+#!/bin/bash
+# Ubuntu 22.04 ARM64 / ROS 2 Humble launcher for the RK3566 vendor OS.
+# Install on the BOARD: install -m 0755 rk-ros2 /usr/local/bin/rk-ros2
+#
+# Filesystem layout (no host OS, kernel, or ROS 1 changes):
+#   /opt/rk3566-humble/rootfs     Ubuntu Jammy ARM64 + /opt/ros/humble
+#   /opt/rk3566-humble/workspace  Board-native source/build/install files
+# The latter is bound at /workspace. An existing install/local_setup.bash
+# is sourced after Humble; x86 build/install directories must not be copied in.
+#
+# Run "rk-ros2" for a clean interactive shell, or "rk-ros2 ros2 pkg list".
+# Only ROS_DOMAIN_ID, ROS_LOCALHOST_ONLY, and optional RMW_IMPLEMENTATION are
+# inherited. Defaults: ROS_DOMAIN_ID=66, ROS_LOCALHOST_ONLY=1 (local tests).
+# For a deliberately enabled network test, use ROS_LOCALHOST_ONLY=0 rk-ros2 ...
+# Pass other variables with "rk-ros2 env NAME=value command ...".
+# Each invocation gets a private mount namespace. /dev is available to an
+# explicitly requested command, but this launcher starts no device/flight service.
+# There is no persistent proxy configuration, daemon, or boot-time action here.
+
+set -euo pipefail
+
+RK_ROS2_ROOTFS=/opt/rk3566-humble/rootfs
+RK_ROS2_WORKSPACE=/opt/rk3566-humble/workspace
+
+rk_ros2_error() {
+    printf 'rk-ros2: %s\n' "$*" >&2
+    exit 1
+}
+
+rk_ros2_enter() {
+    # Called only by main() through unshare --mount --propagation private.
+    # Mounts are private to this command and disappear with its last process.
+    local target domain localhost chroot_bin
+    local -a runtime_env
+    for target in proc sys dev workspace; do
+        [[ ! -L "$RK_ROS2_ROOTFS/$target" ]] ||
+            rk_ros2_error "refusing symlink mount target: $RK_ROS2_ROOTFS/$target"
+        mkdir -p -- "$RK_ROS2_ROOTFS/$target"
+    done
+    mkdir -p -- "$RK_ROS2_WORKSPACE"
+    [[ "$(readlink -f -- "$RK_ROS2_WORKSPACE")" == "$RK_ROS2_WORKSPACE" ]] ||
+        rk_ros2_error "workspace must be a real directory: $RK_ROS2_WORKSPACE"
+
+    # Cover inherited mounts with this invocation's own mounts. Repeated and
+    # concurrent invocations therefore do not depend on one another's cleanup.
+    mount -t proc -o nosuid,nodev,noexec proc "$RK_ROS2_ROOTFS/proc"
+    mount --bind /sys "$RK_ROS2_ROOTFS/sys"
+    mount -o remount,bind,ro,nosuid,nodev,noexec "$RK_ROS2_ROOTFS/sys"
+    # Include /dev/pts and /dev/shm, needed by shells and DDS shared memory.
+    # Do not propagate device submounts back into the host or other invocations.
+    mount --rbind /dev "$RK_ROS2_ROOTFS/dev"
+    mount --make-rprivate "$RK_ROS2_ROOTFS/dev"
+    mount --bind "$RK_ROS2_WORKSPACE" "$RK_ROS2_ROOTFS/workspace"
+
+    domain=${ROS_DOMAIN_ID:-66}
+    localhost=${ROS_LOCALHOST_ONLY:-1}
+    [[ "$domain" =~ ^[0-9]+$ && ${#domain} -le 3 ]] ||
+        rk_ros2_error 'ROS_DOMAIN_ID must be an integer from 0 to 232'
+    (( 10#$domain <= 232 )) ||
+        rk_ros2_error 'ROS_DOMAIN_ID must be an integer from 0 to 232'
+    [[ "$localhost" == 0 || "$localhost" == 1 ]] ||
+        rk_ros2_error 'ROS_LOCALHOST_ONLY must be 0 or 1'
+    domain=$((10#$domain))
+
+    runtime_env=(
+        HOME=/root USER=root LOGNAME=root SHELL=/bin/bash
+        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        LANG=C.UTF-8 LC_ALL=C.UTF-8 TERM="${TERM:-dumb}"
+        ROS_DOMAIN_ID="$domain" ROS_LOCALHOST_ONLY="$localhost"
+    )
+    if [[ -n "${RMW_IMPLEMENTATION:-}" ]]; then
+        runtime_env+=(RMW_IMPLEMENTATION="$RMW_IMPLEMENTATION")
+    fi
+    chroot_bin=$(command -v chroot)
+    # Start chroot itself with a clean environment: Noetic PYTHONPATH,
+    # LD_LIBRARY_PATH, CMAKE_PREFIX_PATH and ROS_* variables cannot leak in.
+    exec /usr/bin/env -i "${runtime_env[@]}" "$chroot_bin" "$RK_ROS2_ROOTFS" \
+        /bin/bash --noprofile --norc -c '
+            set -e
+            source /opt/ros/humble/setup.bash
+            if [[ -f /workspace/install/local_setup.bash ]]; then
+                source /workspace/install/local_setup.bash
+            fi
+            cd /workspace
+            if (( $# )); then
+                exec "$@"
+            fi
+            export PS1="(rk3566 humble) \\u@\\h:\\w\\$ "
+            exec /bin/bash --noprofile --norc -i
+        ' rk-ros2 "$@"
+}
+
+rk_ros2_main() {
+    local script tool
+    script=$(readlink -f -- "${BASH_SOURCE[0]}")
+    if (( EUID != 0 )); then
+        command -v sudo >/dev/null || rk_ros2_error 'run as root (sudo is unavailable)'
+        exec sudo --preserve-env=ROS_DOMAIN_ID,ROS_LOCALHOST_ONLY,RMW_IMPLEMENTATION \
+            -- "$script" "$@"
+    fi
+    for tool in unshare mount chroot readlink; do
+        command -v "$tool" >/dev/null || rk_ros2_error "required command is missing: $tool"
+    done
+    [[ -d "$RK_ROS2_ROOTFS" &&
+       "$(readlink -f -- "$RK_ROS2_ROOTFS")" == "$RK_ROS2_ROOTFS" ]] ||
+        rk_ros2_error "rootfs must be a real directory: $RK_ROS2_ROOTFS"
+    [[ -x "$RK_ROS2_ROOTFS/bin/bash" &&
+       -f "$RK_ROS2_ROOTFS/opt/ros/humble/setup.bash" ]] ||
+        rk_ros2_error 'Ubuntu ARM64 rootfs / ROS 2 Humble is not installed yet'
+    # Sourcing the file defines helpers without recursively invoking main().
+    # unshare failure is fatal; never fall back to modifying host mounts.
+    exec unshare --mount --propagation private -- /bin/bash --noprofile --norc -c '
+        source "$1"
+        shift
+        rk_ros2_enter "$@"
+    ' rk-ros2 "$script" "$@"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    rk_ros2_main "$@"
+fi

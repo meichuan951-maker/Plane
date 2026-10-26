@@ -1,0 +1,18 @@
+# MicoAir743v2 USB 台架诊断配置；只发送 TIMESYNC，不发送飞行或参数命令。
+# 设备路径来自本机当前飞控的 USB 标识；换飞控或主机时须重新核对。
+device: /dev/serial/by-id/usb-MicoAir_MicoAir743v2_0-if00
+baud: 921600
+system_id: 1
+component_id: 1
+own_system_id: 42
+own_component_id: 191
+# 未经实际固件语义与实物坐标核验，不输出可导航位姿。
+px4_odometry_contract_confirmed: false
+timesync_enabled: true
+max_pose_age_s: 0.2
+# 本 USB 链路当前 ESTIMATOR_STATUS / HEARTBEAT 约 1 Hz；仅供台架诊断。
+# 运行配置 px4_link.yaml 的 0.5 秒估计器超时保持不变。
+estimator_timeout_s: 1.5
+heartbeat_timeout_s: 1.5
+max_position_std_m: 0.5
+max_angle_std_rad: 0.35

@@ -8,7 +8,15 @@ runs/
 *.onnx
 *.rknn
 
-# 所有 CMake 生成物集中到 build_cpp；也忽略 IDE/临时变体目录。
+# 所有 CMake 生成物集中到根目录 build/；旧目录模式保留为忽略规则。
 /build/
 /build_*/
 /CMakeUserPresets.json
+
+# colcon installation products and logs are not source files.
+/install/
+/log/
+
+# CMake 错误原地配置时也不提交缓存。
+/CMakeCache.txt
+/CMakeFiles/

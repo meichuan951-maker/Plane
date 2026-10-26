@@ -1,0 +1,223 @@
+{
+  "archive_date": "2026-10-23",
+  "timezone": "Asia/Shanghai",
+  "project_root": "no_demo",
+  "description": "Astra Pro dedicated files moved without content or permission changes; YLR4K uses the shared UVC pipeline.",
+  "hash_algorithm": "sha256",
+  "verified_after_move": true,
+  "files": [
+    {
+      "source_path": "config/astra_light_bars.yaml",
+      "archive_path": "archive/astra_pro_20261023/config/astra_light_bars.yaml",
+      "sha256": "19639cb976cf8686ca0f7d0eb08082eb67ddcc734e569ae22e9f97824f443f55",
+      "size_bytes": 628,
+      "mode": "0664",
+      "mtime_ns": 1791881843558528907,
+      "action": "moved"
+    },
+    {
+      "source_path": "config/astra_rgb_controls.yaml",
+      "archive_path": "archive/astra_pro_20261023/config/astra_rgb_controls.yaml",
+      "sha256": "2161ebf1fbc847434af5f44093faae16812b2f13755bae6b16803db1eac0525b",
+      "size_bytes": 548,
+      "mode": "0664",
+      "mtime_ns": 1791812031772739870,
+      "action": "moved"
+    },
+    {
+      "source_path": "include/demo_aim/detail/app/depth/application.hpp",
+      "archive_path": "archive/astra_pro_20261023/include/demo_aim/detail/app/depth/application.hpp",
+      "sha256": "a6c07317e3a2f0738dd6ecf19a81e3374044a977ece7fe573e392bc5dd51d92b",
+      "size_bytes": 74,
+      "mode": "0664",
+      "mtime_ns": 1791883358473576391,
+      "action": "moved"
+    },
+    {
+      "source_path": "include/demo_aim/detail/app/depth/options.hpp",
+      "archive_path": "archive/astra_pro_20261023/include/demo_aim/detail/app/depth/options.hpp",
+      "sha256": "cdadbf6295e238928a1ddc30812b3ed95691d3c9cd57067893f7ea37759dce4d",
+      "size_bytes": 402,
+      "mode": "0664",
+      "mtime_ns": 1791883358473576391,
+      "action": "moved"
+    },
+    {
+      "source_path": "include/demo_aim/detail/app/depth/preview.hpp",
+      "archive_path": "archive/astra_pro_20261023/include/demo_aim/detail/app/depth/preview.hpp",
+      "sha256": "87ac0d679d13de358be38c61fc9e9400bdc184d41518059abafba0710c5a96f4",
+      "size_bytes": 504,
+      "mode": "0664",
+      "mtime_ns": 1792326961324139574,
+      "action": "moved"
+    },
+    {
+      "source_path": "include/demo_aim/detail/input/astra_depth_worker.hpp",
+      "archive_path": "archive/astra_pro_20261023/include/demo_aim/detail/input/astra_depth_worker.hpp",
+      "sha256": "5cd910d23533920cad0e95b14f8e8afea8a978cfbd573492e0a5381f5d90478c",
+      "size_bytes": 59,
+      "mode": "0664",
+      "mtime_ns": 1791620161820289105,
+      "action": "moved"
+    },
+    {
+      "source_path": "scripts/astra_armor_live.sh",
+      "archive_path": "archive/astra_pro_20261023/scripts/astra_armor_live.sh",
+      "sha256": "f3e18bbb22085b70815a80abe58c14f16d1bc326ca110c845236c54e973c8f9d",
+      "size_bytes": 2088,
+      "mode": "0775",
+      "mtime_ns": 1791813194185079507,
+      "action": "moved"
+    },
+    {
+      "source_path": "scripts/astra_live.sh",
+      "archive_path": "archive/astra_pro_20261023/scripts/astra_live.sh",
+      "sha256": "444a9f5dd8b13bafe71dd2eb370a2c14992e8ded43f1365063bd07edc1a044c8",
+      "size_bytes": 857,
+      "mode": "0775",
+      "mtime_ns": 1792315732872512557,
+      "action": "moved"
+    },
+    {
+      "source_path": "scripts/check_astra_depth.sh",
+      "archive_path": "archive/astra_pro_20261023/scripts/check_astra_depth.sh",
+      "sha256": "712b8ed4af07904cde54957e00027394f29e1548799a84cac524fe3b44f41c43",
+      "size_bytes": 1081,
+      "mode": "0775",
+      "mtime_ns": 1792315732872512557,
+      "action": "moved"
+    },
+    {
+      "source_path": "src/app/astra_live_measure.cpp",
+      "archive_path": "archive/astra_pro_20261023/src/app/astra_live_measure.cpp",
+      "sha256": "6691793b03e069fce3292ab89b3034eb1d0d9568007ceed1dc255611a6865f23",
+      "size_bytes": 129,
+      "mode": "0664",
+      "mtime_ns": 1792326961321142030,
+      "action": "moved"
+    },
+    {
+      "source_path": "src/app/depth/application.cpp",
+      "archive_path": "archive/astra_pro_20261023/src/app/depth/application.cpp",
+      "sha256": "e19cf57bdcf7b98b887e79d8bfcf59a3241c414e402bba97e9adf4ad97ff22f0",
+      "size_bytes": 7083,
+      "mode": "0664",
+      "mtime_ns": 1792326961325138755,
+      "action": "moved"
+    },
+    {
+      "source_path": "src/app/depth/options.cpp",
+      "archive_path": "archive/astra_pro_20261023/src/app/depth/options.cpp",
+      "sha256": "349d93df48897440d958666111d8380db282f329958685c99f3466d878329f0b",
+      "size_bytes": 2856,
+      "mode": "0664",
+      "mtime_ns": 1792326961324139574,
+      "action": "moved"
+    },
+    {
+      "source_path": "src/app/depth/preview.cpp",
+      "archive_path": "archive/astra_pro_20261023/src/app/depth/preview.cpp",
+      "sha256": "f3fe9ff080b720543220d00595f8a53d2c18eec1236bd919cc84360d442d9e1e",
+      "size_bytes": 4787,
+      "mode": "0664",
+      "mtime_ns": 1792326961324139574,
+      "action": "moved"
+    },
+    {
+      "source_path": "src/input/astra_depth_worker.cpp",
+      "archive_path": "archive/astra_pro_20261023/src/input/astra_depth_worker.cpp",
+      "sha256": "67b5ce575ad9e685693ddde2f04b40bf01c44fa6108a7544f09b97cbfe092238",
+      "size_bytes": 6529,
+      "mode": "0664",
+      "mtime_ns": 1792326961318144486,
+      "action": "moved"
+    },
+    {
+      "source_path": "tools/astra_depth_check.cpp",
+      "archive_path": "archive/astra_pro_20261023/tools/astra_depth_check.cpp",
+      "sha256": "4de0169233acff0d859c218b1e1e9d3126096128e7c9928631aec63b9e57dd98",
+      "size_bytes": 9913,
+      "mode": "0664",
+      "mtime_ns": 1791615611057535184,
+      "action": "moved"
+    },
+    {
+      "source_path": "tools/astra_rgb_controls.py",
+      "archive_path": "archive/astra_pro_20261023/tools/astra_rgb_controls.py",
+      "sha256": "47f55c9c684999f25c06f41ce849c1af4042ed5fba9b0e164bc87b977644c409",
+      "size_bytes": 2797,
+      "mode": "0664",
+      "mtime_ns": 1791812031807739687,
+      "action": "moved"
+    },
+    {
+      "source_path": "CMakeLists.txt",
+      "archive_path": "archive/astra_pro_20261023/CMakeLists.txt",
+      "action": "snapshot",
+      "sha256": "69656c7091256caeab2cace9699917473d1def3ef78f4cb5ae85e9c7da201574",
+      "size_bytes": 10843,
+      "mode": "0664",
+      "mtime_ns": 1792497903477947195
+    },
+    {
+      "source_path": "test/CMakeLists.txt",
+      "archive_path": "archive/astra_pro_20261023/test/CMakeLists.txt",
+      "action": "snapshot",
+      "sha256": "661f97b37b22d05510b01750ad001250235b45b9d06230f260149799e547473c",
+      "size_bytes": 6617,
+      "mode": "0664",
+      "mtime_ns": 1792579124304020164
+    },
+    {
+      "source_path": "scripts/build.sh",
+      "archive_path": "archive/astra_pro_20261023/scripts/build.sh",
+      "action": "snapshot",
+      "sha256": "4976225d5489e0e5e567bd67c93c4dac23105e1774fcf7487a2012096545d2fd",
+      "size_bytes": 1986,
+      "mode": "0755",
+      "mtime_ns": 1792315732872512557
+    },
+    {
+      "source_path": "config/armor_auto.yaml",
+      "archive_path": "archive/astra_pro_20261023/config/armor_auto.yaml",
+      "action": "snapshot",
+      "sha256": "e5586d71e1f4ad85ea3b9849c2d70a975f6808cc2e741df7d0c8b658b36ae0d3",
+      "size_bytes": 689,
+      "mode": "0664",
+      "mtime_ns": 1791813194216079969
+    },
+    {
+      "source_path": "cmake/ArchiveDisabledTargets.cmake",
+      "archive_path": "archive/astra_pro_20261023/cmake/ArchiveDisabledTargets.cmake",
+      "action": "snapshot",
+      "sha256": "22ee0a3b43988a045fa017e87f24ab2f7faec835eb38d2eccb48e43920dca3f2",
+      "size_bytes": 1195,
+      "mode": "0644",
+      "mtime_ns": 1792323836454485173
+    },
+    {
+      "source_path": "install/no_demo_aim_cpp/share/no_demo_aim/astra_light_bars.yaml",
+      "archive_path": "archive/astra_pro_20261023/installed_snapshot/share/no_demo_aim/astra_light_bars.yaml",
+      "action": "moved",
+      "sha256": "19639cb976cf8686ca0f7d0eb08082eb67ddcc734e569ae22e9f97824f443f55",
+      "size_bytes": 628,
+      "mode": "0644",
+      "mtime_ns": 1791881843000000000
+    },
+    {
+      "source_path": "install/no_demo_aim_cpp/share/no_demo_aim/armor_auto.yaml",
+      "archive_path": "archive/astra_pro_20261023/installed_snapshot/share/no_demo_aim/armor_auto.yaml",
+      "action": "snapshot",
+      "sha256": "e5586d71e1f4ad85ea3b9849c2d70a975f6808cc2e741df7d0c8b658b36ae0d3",
+      "size_bytes": 689,
+      "mode": "0644",
+      "mtime_ns": 1791813194000000000
+    }
+  ],
+  "retained_shared_files": [
+    "src/app/depth/output.cpp",
+    "include/demo_aim/detail/app/depth/output.hpp",
+    "src/vision/depth_plane.cpp",
+    "include/demo_aim/depth_plane.hpp"
+  ]
+}

@@ -21,6 +21,17 @@ Json LinkDiagnostics::json() const {
           {"bad_frames", bad_frames},
           {"foreign_packets", foreign_packets},
           {"rejected_odometry", rejected_odometry},
+          {"timesync_responses", timesync_responses},
+          {"timesync_accepted", timesync_accepted},
+          {"timesync_unmatched", timesync_unmatched},
+          {"timesync_wrong_target", timesync_wrong_target},
+          {"timesync_bad_rtt", timesync_bad_rtt},
+          {"clock_sync_samples", clock_sync_samples},
+          {"timesync_target_system",
+           timesync_target_system ? Json(*timesync_target_system) : Json(nullptr)},
+          {"timesync_target_component",
+           timesync_target_component ? Json(*timesync_target_component)
+                                     : Json(nullptr)},
           {"epoch", epoch},
           {"clock_ready", clock_ready},
           {"estimator_ready", estimator_ready},
@@ -100,18 +111,30 @@ struct MavlinkLink::Impl {
   void timesync(const mavlink_message_t &m, double now) {
     mavlink_timesync_t s{};
     mavlink_msg_timesync_decode(&m, &s);
+    if (s.tc1 <= 0)
+      return; // 飞控主动探针不是对本机请求的响应。
+    ++diag.timesync_responses;
+    if (!pending_token || s.ts1 != pending_token) {
+      ++diag.timesync_unmatched;
+      return;
+    }
+    diag.timesync_target_system = s.target_system;
+    diag.timesync_target_component = s.target_component;
     const bool addressed = (s.target_system == config.own_system_id &&
                             s.target_component == config.own_component_id);
     // 兼容旧版 PX4 的广播响应，但仍必须匹配来源与唯一的本机待决 token。
     const bool legacy = s.target_system == 0 && s.target_component == 0;
-    if (!pending_token || s.ts1 != pending_token || s.tc1 <= 0 ||
-        (!addressed && !legacy))
+    if (!addressed && !legacy) {
+      ++diag.timesync_wrong_target;
       return;
+    }
     const double sent = static_cast<double>(pending_token) * 1e-9;
     pending_token = 0;
     const double rtt = now - sent;
-    if (rtt < 0 || rtt > .02)
+    if (rtt < 0 || rtt > .02) {
+      ++diag.timesync_bad_rtt;
       return;
+    }
     const double candidate =
         (now + sent) / 2 - static_cast<double>(s.tc1) * 1e-9;
     if (sync_samples && std::abs(candidate - offset) > .05) {
@@ -132,6 +155,7 @@ struct MavlinkLink::Impl {
     sync_error = rtt / 2 + deviation;
     sync_samples = std::min(sync_samples + 1, 100);
     last_sync = now;
+    ++diag.timesync_accepted;
   }
   PoseSample odometry(const mavlink_message_t &m, double now) {
     mavlink_odometry_t o{};
@@ -194,20 +218,33 @@ struct MavlinkLink::Impl {
       if (!std::isfinite(variance) || variance < 0 || variance > limit * limit)
         return reject("pose_covariance_unknown_or_large");
     }
-    // 校验整个协方差半矩阵及 PSD，拒绝仅对角线看似正常的损坏输入。
+    // PX4 只发布六个对角方差，十五个非对角项全部填 NaN。
+    // 接受此明确布局，但不将缺失的相关项当成零协方差。
+    // 完整矩阵仍检查 PSD；混合缺失布局与无穷值均拒绝。
     cv::Matx<double, 6, 6> covariance;
+    bool missing_cross_terms = false, known_cross_terms = false;
     int index = 0;
     for (int row = 0; row < 6; ++row)
       for (int col = row; col < 6; ++col) {
         const double value = o.pose_covariance[index++];
+        if (row != col && std::isnan(value)) {
+          missing_cross_terms = true;
+          continue;
+        }
         if (!std::isfinite(value))
           return reject("pose_covariance_invalid");
+        if (row != col)
+          known_cross_terms = true;
         covariance(row, col) = covariance(col, row) = value;
       }
-    cv::Mat eigenvalues;
-    cv::eigen(cv::Mat(covariance), eigenvalues);
-    if (eigenvalues.at<double>(5) < -1e-8)
+    if (missing_cross_terms && known_cross_terms)
       return reject("pose_covariance_invalid");
+    if (!missing_cross_terms) {
+      cv::Mat eigenvalues;
+      cv::eigen(cv::Mat(covariance), eigenvalues);
+      if (eigenvalues.at<double>(5) < -1e-8)
+        return reject("pose_covariance_invalid");
+    }
     cv::Matx33d basis;
     if (o.frame_id == MAV_FRAME_LOCAL_NED) {
       basis = enuFromNed();
@@ -405,6 +442,7 @@ LinkDiagnostics MavlinkLink::diagnostics(double now) const {
   d.odometry_frame_id = impl_->parent_frame;
   d.velocity_frame_id = impl_->velocity_frame;
   d.clock_error_s = impl_->sync_error;
+  d.clock_sync_samples = impl_->sync_samples;
   return d;
 }
 void MavlinkLink::resetSession() {

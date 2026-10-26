@@ -1,16 +1,17 @@
 // 应用编排：解析参数 → 选择输入/检测器 → 调用 Pipeline → 记录、发布和显示结果。
-#include "application.hpp"
+#include "demo_aim/detail/app/application.hpp"
 #include "demo_aim/core.hpp"
 #include "demo_aim/input.hpp"
-#include "demo_aim/yolo.hpp"
-#include "json_log.hpp"
-#include "options.hpp"
-#include "ros_output.hpp"
+#include "demo_aim/light_bar_observation.hpp"
+#include "demo_aim/detail/app/json_log.hpp"
+#include "demo_aim/detail/app/options.hpp"
+#include "demo_aim/detail/app/ros_output.hpp"
 #include <csignal>
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <sstream>
@@ -32,7 +33,7 @@ int run(int argc, char **argv) {
   std::unique_ptr<RosOutput> ros;
   try {
     const auto a = parse(argc, argv);
-// 限制 OpenCV 内部工作线程，控制推理时的 CPU 并行度。
+// 限制 OpenCV 内部工作线程，控制视觉处理的 CPU 并行度。
     cv::setNumThreads(a.threads);
     const auto config = aim::Config::load(a.config);
     aim::Pipeline pipeline(config);
@@ -43,17 +44,13 @@ int run(int argc, char **argv) {
             "Preview directory already exists; use a fresh name");
       std::filesystem::create_directories(a.preview);
     }
-// 只有指定权重才实例化检测器；合成/无权重回放直接使用提供的框。
-    std::unique_ptr<aim::YoloV8> detector;
-    if (!a.weights.empty())
-      detector = std::make_unique<aim::YoloV8>(a.weights, a.classes,
-                                               a.input_size, config);
+// 实时相机复用传统灯条检测；合成数据仍使用注入框。
+    std::optional<aim::LightBarConfig> detector_config;
     std::unique_ptr<aim::RealSense> camera;
-    std::unique_ptr<aim::Replay> replay;
-    if (a.source == "realsense")
+    if (a.source == "realsense") {
+      detector_config = aim::LightBarConfig::load(a.detector_config);
       camera = std::make_unique<aim::RealSense>(a.serial);
-    if (a.source == "replay")
-      replay = std::make_unique<aim::Replay>(a.manifest);
+    }
     if (a.ros)
       ros = std::make_unique<RosOutput>();
     std::signal(SIGINT, onSignal);
@@ -62,13 +59,10 @@ int run(int argc, char **argv) {
 // 顺序流水线：每次处理一帧，确保状态关联、时间检查按采集顺序进行。
     while (!interrupted && (a.frames == 0 || count < a.frames)) {
       aim::Sample sample;
-// 实时帧在推理后取 now，使相机等待、对齐和推理耗时参与过期判断。
+// 实时帧在检测后取 now，使相机等待、对齐和检测耗时参与过期判断。
       if (camera)
         sample.frame = camera->read();
-      else if (replay) {
-        if (!replay->next(sample))
-          break;
-      } else
+      else
         sample = aim::synthetic(static_cast<std::uint64_t>(count));
       if (a.source == "synthetic-rgb") {
         sample.frame.depth_m.release();
@@ -76,21 +70,14 @@ int run(int argc, char **argv) {
         sample.frame.rectified = false;
         sample.frame.source = "synthetic_rgb_injected_boxes";
       }
-// 重跑检测时替换注入框；回放把本次推理耗时加入虚拟处理时间。
-      if (detector) {
-        const double start = aim::monotonicNow();
-        sample.detections = detector->detect(sample.frame.color_bgr);
-        if (replay) {
-          sample.process_s += aim::monotonicNow() - start;
-          sample.frame.source = "replay_yolov8_onnx_cpp";
-        }
-      }
+// 将真实灯条配对结果映射为公共观测，不推断装甲数字身份。
+      if (detector_config)
+        sample.detections = aim::detectArmorObservations(
+            sample.frame.color_bgr, *detector_config);
       if (camera)
         sample.process_s = aim::monotonicNow();
       auto solution =
           pipeline.process(sample.frame, sample.detections, sample.process_s);
-      if (detector)
-        solution.model_sha256 = detector->modelHash();
 // 每帧记录有效和无效结果，便于从 reason 分析失效原因。
       const auto payload = solution.json().dump();
       output->write(payload);

@@ -1,14 +1,16 @@
-# 用户颜色协议：1=蓝色，2=红色。当前摆放的是蓝色 4 号靶；这里只按灯条颜色识别。
+# YLR4K 普通 UVC 彩色相机。用户颜色协议：1=蓝色，2=红色；不识别装甲数字。
 target_color: 1
 camera:
-  device: /dev/v4l/by-id/usb-Astra_Pro_HD_Camera_Astra_Pro_HD_Camera-video-index0
+  # 示例节点；先运行 camera_light_test --list，改为本机实际彩色节点或 by-id 路径。
+  device: /dev/video0
   width: 640
   height: 480
   fps: 30
-  format: YUYV
+  format: MJPG # 请求模式；以实际驱动协商结果为准。
 # 下列路径相对于本配置文件所在目录。
-detector_config: astra_light_bars.yaml
-rgb_calibration: astra_rgb_calibration.yaml
+detector_config: light_bars.yaml
+# 需用这台 YLR4K、当前分辨率重新标定；文件缺失时仅检测/跟踪，不输出 PnP 数值。
+rgb_calibration: ylr4k_rgb_calibration.yaml
 armor:
   lightbar_center_distance_m: 0.135
   lightbar_length_m: 0.056

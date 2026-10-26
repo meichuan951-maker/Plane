@@ -1,0 +1,72 @@
+{
+  "date": "2026-10-25",
+  "files": [
+    {
+      "source": "tools/maixcam/enable_uvc.py",
+      "archived_path": "tools/maixcam/enable_uvc.py",
+      "original_sha256": "6438230cc2ae31b25e877fdf7ba4c9b3e29c4ef3de69361e758248a734af7edd",
+      "archived_sha256": "6438230cc2ae31b25e877fdf7ba4c9b3e29c4ef3de69361e758248a734af7edd",
+      "archive_path_adjusted": false
+    },
+    {
+      "source": "tools/maixcam/preview_maixvision.py",
+      "archived_path": "tools/maixcam/preview_maixvision.py",
+      "original_sha256": "bd7744d6efb7c5b8880edbdb11eed23970e52adec08e05e7eeaf1f3063d39e46",
+      "archived_sha256": "bd7744d6efb7c5b8880edbdb11eed23970e52adec08e05e7eeaf1f3063d39e46",
+      "archive_path_adjusted": false
+    },
+    {
+      "source": "tools/maixcam/run_light_test.py",
+      "archived_path": "tools/maixcam/run_light_test.py",
+      "original_sha256": "a2154d9ca39c2fe90dbe7d57a8a7e40b9df29b45a4c6d55d5a48c1b4aa5d83b6",
+      "archived_sha256": "86bcd1c500564f7d5bb952906816f915df2f77a539c53c2f9f597e54a7df3ebb",
+      "archive_path_adjusted": true
+    },
+    {
+      "source": "tools/maixcam/stream_uvc.py",
+      "archived_path": "tools/maixcam/stream_uvc.py",
+      "original_sha256": "2085c6a0d885edfc2dcd91d8d69f73cda59934117ad1e40fccd9e18c797f3866",
+      "archived_sha256": "2085c6a0d885edfc2dcd91d8d69f73cda59934117ad1e40fccd9e18c797f3866",
+      "archive_path_adjusted": false
+    },
+    {
+      "source": "tools/maixcam/README.md",
+      "archived_path": "tools/maixcam/README.md",
+      "original_sha256": "530c0c9bc6b191571f62916f22a0f97e835ada69eb5383bbcb2153fe0cbbd8bd",
+      "archived_sha256": "558b0045e8e2f2028b59342217d2ff0eae25ade841fdb2cdb0110829cfc50e2b",
+      "archive_path_adjusted": true
+    },
+    {
+      "source": "test/input/test_maixcam_armor_geometry.py",
+      "archived_path": "test/input/test_maixcam_armor_geometry.py",
+      "original_sha256": "2ba0277dd943d472a5f02f6d85220ec0b22118e21d26fbe774394aaff7c2dbc9",
+      "archived_sha256": "2ba0277dd943d472a5f02f6d85220ec0b22118e21d26fbe774394aaff7c2dbc9",
+      "archive_path_adjusted": false
+    },
+    {
+      "source": "test/input/test_maixcam_armor_pipeline.py",
+      "archived_path": "test/input/test_maixcam_armor_pipeline.py",
+      "original_sha256": "8ef4145a928a0f21ba402705894984c73a1c907c62b022081350e103a32874b9",
+      "archived_sha256": "8ef4145a928a0f21ba402705894984c73a1c907c62b022081350e103a32874b9",
+      "archive_path_adjusted": false
+    },
+    {
+      "source": "test/input/test_maixcam_stream.py",
+      "archived_path": "test/input/test_maixcam_stream.py",
+      "original_sha256": "3eb30f0f88d88d7cc6c864d140a2d5562b0ff3d3f301cfbe79daf15721eeaeca",
+      "archived_sha256": "3eb30f0f88d88d7cc6c864d140a2d5562b0ff3d3f301cfbe79daf15721eeaeca",
+      "archive_path_adjusted": false
+    }
+  ],
+  "runtime_records": [
+    {
+      "source": "runs/maixcam_check_20261025_wut2lil3",
+      "destination": "archive/maixcam_20261025/runs/maixcam_check_20261025_wut2lil3",
+      "sha256": {
+        "raw.png": "10effbf7339594c46bca2abf8001ee9645bf90ba1cc47587035cc5ee48912d8c",
+        "capture.log": "c167c60a68ccdd8c69a68ab806e2e8cb2047c6f26f3decf625c8d9f7c05aeea4",
+        "overlay.png": "1e9cf6f188880ab7dfff3186e92cc7cb9e2eba4e6be7cdf9fd2b7de21d17ef17"
+      }
+    }
+  ]
+}

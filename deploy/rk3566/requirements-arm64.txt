@@ -1,0 +1,4 @@
+# Installed inside the dedicated Jammy/Python 3.10 rootfs; PyYAML/serial use apt.
+pymavlink==2.4.50
+fastcrc==0.5.0
+lxml==6.1.3

@@ -1,0 +1,20 @@
+# 用户颜色协议：1=蓝色，2=红色。当前摆放的是蓝色 4 号靶；这里只按灯条颜色识别。
+target_color: 1
+camera:
+  device: /dev/v4l/by-id/usb-Astra_Pro_HD_Camera_Astra_Pro_HD_Camera-video-index0
+  width: 640
+  height: 480
+  fps: 30
+  format: YUYV
+# 下列路径相对于本配置文件所在目录。
+detector_config: astra_light_bars.yaml
+rgb_calibration: astra_rgb_calibration.yaml
+armor:
+  lightbar_center_distance_m: 0.135
+  lightbar_length_m: 0.056
+  dimensions_confirmed: true # 用户已确认这两个尺寸；换目标时需复核。
+tracking:
+  confirmation_frames: 3
+  lost_seconds: 0.25
+  association_distance_ratio: 0.7
+  association_size_ratio: 2.0

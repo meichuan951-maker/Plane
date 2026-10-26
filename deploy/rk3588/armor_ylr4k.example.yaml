@@ -1,0 +1,20 @@
+# YLR4K 普通 UVC 彩色相机示例；设备路径、格式和曝光须在目标板核验。
+target_color: 1 # 1=蓝色，2=红色。
+camera:
+  device: /dev/v4l/by-id/REPLACE_ME_YLR4K
+  width: 640
+  height: 480
+  fps: 30
+  format: MJPG # 仅在相机支持该模式时使用；否则核验后改为 YUYV。
+detector_config: ../../config/light_bars.yaml
+# 此文件有意不存在。没有本机标定时只做像素跟踪，不报告米制距离/角度。
+rgb_calibration: ylr4k_rgb_calibration.yaml
+armor:
+  lightbar_center_distance_m: 0.135
+  lightbar_length_m: 0.056
+  dimensions_confirmed: false
+tracking:
+  confirmation_frames: 3
+  lost_seconds: 0.25
+  association_distance_ratio: 0.7
+  association_size_ratio: 2.0

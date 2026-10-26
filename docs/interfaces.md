@@ -1,36 +1,48 @@
 # C++ 接口与数据契约
 
 本页统一维护视觉、定位、坐标与任务接口；构建和运行见 [主 README](../README.md)。
-代码为 C++17。公共 include 路径、库名、程序名和 JSON 字段保持兼容。
+代码为 C++17。以下描述当前保留的公共接口、库和输出约定。更新：2026-10-26。
+2027 场景与外部仿真入口见 [RMUC 2027 集成说明](rmuc2027_integration.md)。
 
 ## 模块与依赖
 
-- `src/vision/`：core.cpp 处理观测确认/可选测距，observation.cpp 序列化，yolo.cpp 处理 ONNX 检测。
-- `src/input/`：合成、PNG 回放、可选 RealSense，以及 UVC/深度采集进程与控制。
+- `src/vision/`：core.cpp 处理观测确认/可选测距，observation.cpp 序列化，light_bars.cpp 等实现传统灯条与装甲候选检测。
+- `src/input/`：合成、可选 RealSense，以及 UVC 采集进程与控制。
 - `src/navigation/`：geometry.cpp 刚体变换，localization.cpp 位姿历史和世界目标，mission.cpp 任务决策。
 - `src/io/`：flight_state.cpp 遥测缓存，mavlink_link.cpp 协议与同步，serial_port.cpp Linux UART。
-- `src/app/`：程序入口、标定、日志与可选 ROS 输出；`camera/`、`armor_auto/`、`depth/`
-  各自组织参数、循环和预览，`common/` 复用严格整数解析与 FPS 统计。
+- `src/app/`：程序入口、标定、日志与可选 ROS 输出；`camera/`、`armor_auto/`
+  各自组织参数、循环和预览，`depth/` 保留通用测量输出，`common/` 复用严格整数解析与 FPS 统计。
 
 `aim_observation` 提供观测数据契约与序列化，`aim_flight_state` 提供遥测缓存。
 `aim_core` 保留视觉流水线及对这两个库的公共依赖，现有视觉调用者仍可链接它。
-`aim_input` 和 `aim_navigation` 直接依赖观测契约；`aim_detector` 使用核心配置与 IoU；
+`aim_input` 和 `aim_navigation` 直接依赖观测契约，应用复用 `aim_light_bars` 提供实时检测；
 `aim_mavlink` 依赖导航和遥测缓存，应用负责装配。
+`aim_app_common` 集中编译严格整数解析与帧率统计，供相关应用和回归目标链接。
 
-`aim_camera_stream` 集中构建共享帧、进程监管与 UVC 控制；RGB 程序额外链接 `aim_uvc_worker`，
-Astra 保留专用深度 worker。内部共享内存文件描述符和流状态常量定义在 `uvc_stream_protocol.hpp`。
-`aim_armor_output`、`aim_depth_output` 分别供各自应用与无硬件输出回归使用；两套坐标和有效性契约保持独立。
-核心与导航不链接 DNN、相机 SDK 或 ROS。实际目标列表集中在根 `CMakeLists.txt`。
+`aim_camera_stream` 集中构建共享帧、进程监管与 UVC 控制；YLR4K 等 UVC RGB 程序额外链接 `aim_uvc_worker`。
+内部共享内存文件描述符和流状态常量定义在
+`include/demo_aim/detail/input/uvc_stream_protocol.hpp`。
+共享时钟函数的实现位于 `src/input/uvc_stream_protocol.cpp`，由 `aim_camera_stream` 编译。
+`aim_armor_output` 供自动装甲应用及输出回归使用；`aim_depth_output` 与通用深度平面算法保留供无硬件回归和后续调用，
+该库当前没有对应的独立实时采集应用。两套坐标和有效性契约保持独立。
+核心与导航不链接相机 SDK 或 ROS。生产目标位于根 `CMakeLists.txt`，
+回归目标和测试分组位于 `test/CMakeLists.txt`；测试助手仅供回归目标使用。
 
-自动装甲和深度预览在耗时处理结束后取得时间/帧龄快照，JSON 和预览使用同一快照。
+自动装甲在耗时处理结束后取得时间/帧龄快照，JSON 和预览使用同一快照；通用深度输出保留独立的时效检查。
 帧龄非有限、负值、超过 250 ms，或采集失败/缺帧时，输出测量无效且距离/角度为 `null`。
 停止记录清空测量值与观测时刻，消费端仍须独立检查时效，避免沿用停止前的最后有效记录。
 自动装甲退出保存截图时，重新用最后原图、对应检测和刷新后的时效状态生成叠加图，不复用限频窗口缓存。
 过期/故障时仍保存原图用于诊断，叠加图显示无效状态；已有截图目录拒绝覆盖。
 
-公共接口位于 `include/demo_aim/`，应用私有头文件留在 `src/app/`。
+当前头文件与实现分离的范围为 `no_demo` 应用工程；PX4 与第三方 SDK/生成库保留各自布局。
+`src/` 仅保存 `.cpp` 实现；稳定公共接口位于 `include/demo_aim/`，
+内部头统一位于 `include/demo_aim/detail/`，按对应源码保留 `app/`、`input/` 和子模块路径。
+例如应用头使用 `demo_aim/detail/app/armor_auto/output.hpp`，采集头使用
+`demo_aim/detail/input/uvc_stream.hpp`；同名 `options.hpp`、`application.hpp` 由模块路径区分。
+所有这些头均从 `include/` 搜索根引用；测试也使用该根，不再添加 `src/` 搜索路径。
+`detail/` 不作为稳定公共 API，C++ 命名空间沿用现有模块划分。
 `Pipeline`、`PoseHistory`、`FlightStateCache`、`MavlinkLink`、`MissionMachine` 均按单线程串行访问设计。
-实时集成时应把串口接收与耗时推理解耦，使用有界队列和显式同步，不能积压旧观测。
+实时集成时应把串口接收与耗时图像处理解耦，使用有界队列和显式同步，不能积压旧观测。
 
 ## 输入与时间
 
@@ -44,7 +56,7 @@ CV_32FC1 米制轴向深度，不允许用常数假深度替代单目输入。
 
 `capture_s` 是采集时刻；`received_s` 是可选的图像到达时刻；`process(..., now)`
 是处理入口时刻，三者必须处于同一时钟域并满足 capture ≤ received ≤ now。
-`host_monotonic` 表示本机 steady_clock，`replay_monotonic` 表示离线虚拟时间。
+`host_monotonic` 表示本机 steady_clock，`replay_monotonic` 表示合成输入和离线测试使用的虚拟时间。
 不要直接填入 Unix 时间或 PX4 time_boot_ms。`clock_valid=false` 会拒绝该帧。
 旧字段 `emitted_monotonic_s` 仍表示处理入口，不包含编码、写盘和发送完成时间。
 
@@ -68,6 +80,12 @@ auto payload = result.json();
 
 代码片段中的图像、sequence 和时间由未来采集适配器提供，不是已实现 USB 启动命令。
 
+`demo_aim_cpp --source realsense` 复用传统灯条检测，通过 `src/vision/light_bar_observation.cpp` 的 `detectArmorObservations` 提取装甲候选并转换为 `Detection`，
+再交给 `Pipeline` 做关联和深度测量。`--detector-config` 默认读取 `config/light_bars.yaml`；
+`--config` 默认读取 `config/aim.yaml`，分别管理图像检测阈值与观测有效性条件。
+合成输入直接注入检测框，不运行图像检测。类别 `0=target_red`、`1=target_blue` 表示红蓝颜色，
+不表示敌我或装甲数字身份。候选的 `confidence` 来自几何评分，不是类别概率。
+
 ## 灯条与装甲板几何
 
 `Detection.features` 是可选项。灯条顺序左、右，每条有 top/bottom 两端点；
@@ -77,7 +95,7 @@ auto payload = result.json();
 所有特征使用原图像素坐标，必须有限、位于图像内且非退化；四角还需构成上述顺序的凸四边形。
 非法特征丢弃并报告 `features_reason=invalid_features`，有效检测框可独立保留。
 数值校验不证明特征确实来自灯条。预览只绘制上游实际提供且通过校验的特征，
-不会从 YOLO 框凭空生成角点；青色为灯条，紫色为角点。
+不会仅凭边界框生成角点；青色为灯条，紫色为角点。
 
 ## schema=2 输出契约
 
@@ -107,9 +125,23 @@ if (aim::isDetectionCurrent(result, now, 0.2)) { /* 二维数据 */ }
 if (aim::isCurrent(result, now, 0.2)) { /* 三维数据 */ }
 ```
 
-实时看门狗默认 host_monotonic。离线消费须显式传第四参数 replay_monotonic。
+实时看门狗默认 host_monotonic。消费合成输入等虚拟时间观测时，须显式传第四参数 replay_monotonic。
 跨域、过期、未来或非有限时间均拒绝。停止发布时消费端仍需自己的超时机制。
 异常诊断也使用 schema=2，所有有效标志为 false，未知采集时间与时钟域为 null。
+
+## demo_aim_cpp JSONL 文件管理
+
+`src/app/json_log.cpp` 的 `JsonLog` 管理 `demo_aim_cpp --output FILE`：默认单份最多 10 MiB，
+最多保留 5 个日志文件，包括当前 `FILE` 和 `FILE.1`～`FILE.4`；`.1` 为最近历史，`.4` 为最旧历史。
+每次启动先轮转已有当前文件；运行中下一条记录会使当前文件超限时，再轮转后写入。
+超过单份限额的记录直接报错，不拆行。CLI 没有新增限额参数，内部构造可调整单份大小和保留数量。
+
+`JsonLog` 生命周期内对当前文件和各备份路径持有 `flock` 排他锁，避免不同输出名与备份名重叠时并发写入。
+默认对应 `FILE.lock`、`FILE.1.lock`～`FILE.4.lock`，最多 5 个零字节锁文件，永久留用且不计入 5 个数据日志。
+任一对应路径被其他进程占用时构造明确失败，可改用与这些路径不重叠的其他 `--output`。
+以 `.lock` 结尾的路径保留给锁元数据，不能作为日志输出。
+轮转只操作精确的当前/历史路径，不扫描或清除旧版 `stem_N.ext`、其他输出前缀或 `runs/` 中的历史实验；
+新逻辑不再递增创建 `_N` 编号。`armor_auto` 不使用这套 `JsonLog`，仍独立追加到指定输出文件。
 
 ## 飞控状态缓存
 
@@ -133,55 +165,6 @@ auto snapshot = cache.snapshot(aim::monotonicNow());
 新增定位模块已提供时间同步、有限状态历史和拍摄时刻插值；世界坐标仍需实测相机外参及当前原点对齐。
 不得直接把最新姿态与旧图像组合为目标世界位置。
 
-## 回放数据格式
-
-输入清单版本与输出 JSON schema=2 是两个协议。`examples/cpp_replay/` 保留最小可重复 RGB-D 夹具。
-旧 Python schema=1/NPZ 不会被静默混读。
-
-### RGB-D（输入 schema=2）
-
-清单包含：
-
-```json
-{
-  "schema_version": 2,
-  "rectified": true,
-  "depth_encoding": "uint16_scaled",
-  "depth_scale_m": 0.001,
-  "intrinsics": {"width":100,"height":80,"fx":100,"fy":100,"cx":50,"cy":40},
-  "frames": [{
-    "color":"color.png", "depth":"depth.png",
-    "capture_monotonic_s":1.0, "process_monotonic_s":1.01,
-    "sync_error_s":0,
-    "detections":[{"xyxy":[40,30,60,50],"confidence":0.9,"class_id":0}]
-  }]
-}
-```
-
-深度必须是单通道 16 位 PNG，乘 depth_scale_m 后为米；0 表示无效。图像须已经去畸变、深度对齐到彩色且内参对应保存分辨率。不能给原始畸变图随意声明 rectified=true。路径相对于清单；`detections` 可为空数组。添加 `--weights ... --num-classes ...` 时重跑 YOLO 并替换记录框，同时把本次推理耗时加到虚拟处理时刻。
-
-### 纯彩色或可选深度（输入 schema=3）
-
-纯彩色回放输入使用 schema=3（与输出 schema=2 属于不同协议）：
-
-```json
-{
-  "schema_version": 3,
-  "frames": [{
-    "color": "rgb.png",
-    "capture_monotonic_s": 1.0,
-    "process_monotonic_s": 1.01,
-    "detections": [{"xyxy": [100, 80, 160, 140], "confidence": 0.9, "class_id": 0}]
-  }]
-}
-```
-
-使用已有 rgb.png，运行 `--source replay --manifest 清单路径`。单帧不足默认三帧确认，
-返回 acquiring 正常。可选 intrinsics 与 rectified；深度存在时必须提供
-`depth_encoding=uint16_scaled`、`depth_scale_m` 和逐帧 depth 路径。
-检测项可附 `light_bars_uv`、`corners_uv`、`geometry_layout_id`。
-旧 schema=2 回放仍要求去畸变内参和深度，避免旧数据静默降级。
-
 ## 坐标、同步与世界目标
 
 本实现专门针对核对过的 **PX4 fused ODOMETRY**：
@@ -204,6 +187,17 @@ p_map = map_T_odom × odom_T_body(图像采集时刻) × body_T_camera × p_came
 `body_T_camera` 是实测相机到机体外参，包含旋转和安装偏移。
 `map_T_odom` 是当前定位原点到场地/机库世界系的对齐。它们默认缺失；不会用单位阵假装已经标定。
 USB 和串口只是传输，不产生“香橙派坐标系”。没有 GPS 时的 map 是本地米制世界系，不是经纬度。
+
+对接独立 2027 地图时，`map` 采用地图工程的米制、XY 居中、Z 向上坐标；Z=0 是底板下表面，
+不是各处地面或飞机落稳后的机体原点高度。当前机库停车的共享配置 XYZ 指 `base_link`，
+PX4 生成 pose 指模型根节点；红蓝方由 `config/flight_start.yaml` 选择，导航读取当前 SITL 快照。
+原始 STL 的毫米转换和平移、机体与根节点高度、出生/起飞/目标配置，见
+[2027 坐标与配置](rmuc2027_integration.md#地图与坐标基准)。不得把原始 STL 毫米坐标直接填入任务意图。
+
+地图工程现有控制桥在已知 Gazebo/MAVROS ENU 轴向约定下，用机库上落稳静止的仿真真值标定原点平移；
+该仿真专用标定不证明实机 `map_T_odom` 已知，也不证明 `no_demo` 的定位和视觉已经接入。
+实机和本工程定位链路仍须提供当前会话的 `WorldCalibration`，校验 `time_domain`、拍摄时刻插值与 epoch。
+ROS 仿真 `/clock`、本机单调时间及串口 TIMESYNC 的时间不能直接混用；尚无两工程间的时钟适配器。
 
 TIMESYNC 通过往返时间估计飞控到本机的时钟偏移：至少 5 次稳定响应才启用；
 拒绝 RTT 超过 20 ms 的样本、检查偏移变化，2 s 无新同步即失效。时间误差指标是估计值，
@@ -243,7 +237,7 @@ auto vehicle = aim::poseInMap(current_pose, calibration);
 独立 `armor_auto` 已有基于标定和已知灯条尺寸的 PnP，但尚未接入此世界坐标流水线。
 8～10 m 目标的有效三维观测、目标几何对应与实机标定仍需验证。
 旧 RGB-D 管线默认深度阈值也不是 10 m 的有效测距保证。
-输出世界目标协方差仍为 null，未把 YOLO 置信度或 PX4 自身协方差冒充完整目标误差。
+输出世界目标协方差仍为 null，未把检测评分或 PX4 自身协方差冒充完整目标误差。
 
 ## 任务决策
 
@@ -262,9 +256,16 @@ auto vehicle = aim::poseInMap(current_pose, calibration);
 `segment_clear(start,end)` 必须验证整段运动和机体包络；缺少回调或返回 false 时只输出 hold。
 不能只检查两端，也不能把离线示例中“无障碍”的恒 true 回调用于真机。
 返航路线、恢复点、机库位置由 `MissionConfig` 显式传入，当前示例全部是虚构测试坐标。
+`mission_demo.cpp` 中的单位地图对齐、1 m 起飞高度、固定目标和恒 true 碰撞回调保留为离线夹具；
+不能只替换成 2027 航点就宣称接通场地碰撞检查。真实适配应从完整静态占用图检查整段路径和机体包络，
+并分别验证指定机库点的实体接触停放和完整飞行净空；停车通过不构成自动离库许可。
 
-后续执行器需实现 PX4 Offboard 接入、ENU/map 到飞控当前局部系的逆变换、状态反馈、限速/限加速度、
-受控接近及接触判断、接触后健康确认和精确进库降落；仅将 `x/y` 写进 JSON 不会自动控制飞行。
+`no_demo` 尚无任务意图到外部规划器的目标适配器。独立地图工程已有只连接其本机 SITL 的 PX4 Offboard 控制桥，
+当前默认用于原机库停车监控：静止标定后进入 READY，自动离库尚未认证，`auto_fly:=true` 进入 HOLD，
+不请求 OFFBOARD、不解锁。该桥不消费本工程的观测 JSON 或 `MissionIntent`。
+后续集成需定义目标接受/取消、时效与状态反馈，让规划器生成绕障轨迹，并保持唯一飞控控制出口；
+不能并行启动第二个 Offboard 执行器。真机还需验证 ENU/map 到飞控当前局部系的逆变换、
+限速/限加速度、受控接近及接触判断、接触后健康确认和精确进库降落；仅将 `x/y` 写进 JSON 不会自动控制飞行。
 目标观测不是自身定位消息，不应放进 ODOMETRY 让飞控误认为飞机到了目标位置。
 
 ## MAVLink 传输边界
@@ -295,8 +296,9 @@ MicoVIO 原始定位已经送入 PX4 后，香橙派不将 PX4 融合结果再�
 
 ## 验证记录口径
 
-当前可重复回归由 `test/` 和 `ctest --test-dir build_cpp --output-on-failure` 维护。
+当前可重复回归源码位于 `test/`，推荐用 `./scripts/build.sh --test` 构建并执行；
+已有构建也可直接用 `ctest --test-dir build --output-on-failure`。`test_1/` 是参考资料目录。
 旧 2026-09-16 迁移摘要记录：当时 26 项 C++、22 项 Python 回归通过，60 帧合成共有字段逐帧一致
-（容差 1e-8、差异 0），44 帧有效；5 帧 PNG 回放中 3 帧有效，重名输出保留。
-当时记录了默认、无 RealSense、ROS 构建检查，但没有证明实际相机、ROS 传输、模型精度或飞行能力。
-旧 Python 实现与历史生成 JSON 已退出当前输入夹具；这些历史数字不替代现在的 84 项 C++ 用例。
+（容差 1e-8、差异 0），44 帧有效。
+当时记录了默认、无 RealSense、ROS 构建检查，但没有证明实际相机、ROS 传输、检测精度或飞行能力。
+旧 Python 实现与历史生成 JSON 已退出当前输入夹具；这些历史数字不替代当前 CTest 回归结果。

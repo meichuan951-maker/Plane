@@ -1,4 +1,4 @@
-#include "output.hpp"
+#include "demo_aim/detail/app/depth/output.hpp"
 #include <cmath>
 namespace aim::depth_app {
 bool currentFrame(const FrameContext &context) {

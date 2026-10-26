@@ -1,5 +1,5 @@
-#include "options.hpp"
-#include "../common/parse.hpp"
+#include "demo_aim/detail/app/armor_auto/options.hpp"
+#include "demo_aim/detail/app/common/parse.hpp"
 #include <iostream>
 #include <stdexcept>
 

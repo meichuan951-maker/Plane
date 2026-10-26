@@ -1,5 +1,5 @@
-#include "armor_calibrate.hpp"
-#include "../input/uvc_stream.hpp"
+#include "demo_aim/detail/app/armor_calibrate.hpp"
+#include "demo_aim/detail/input/uvc_stream.hpp"
 #include "demo_aim/camera_calibration.hpp"
 #include <algorithm>
 #include <chrono>
@@ -38,7 +38,7 @@ int calibrateArmorCamera(const ArmorAutoConfig &c, int columns, int rows,
   CameraStream camera(s);
   CameraControls controls;
   const std::string window =
-      "Astra RGB calibration - move printed board, SPACE capture, c solve";
+      "UVC RGB calibration - move printed board, SPACE capture, c solve";
   cv::namedWindow(window, cv::WINDOW_NORMAL);
   cv::resizeWindow(window, c.width, c.height);
   cv::Mat raw, gray, view;

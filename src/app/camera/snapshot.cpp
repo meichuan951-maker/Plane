@@ -1,4 +1,4 @@
-#include "snapshot.hpp"
+#include "demo_aim/detail/app/camera/snapshot.hpp"
 #include <fstream>
 #include <iomanip>
 #include <iostream>

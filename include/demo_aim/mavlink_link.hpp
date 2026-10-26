@@ -17,9 +17,13 @@ struct LinkConfig {
 struct LinkDiagnostics {
   std::uint64_t packets{}, bad_frames{}, foreign_packets{}, rejected_odometry{},
       epoch{1};
+  std::uint64_t timesync_responses{}, timesync_accepted{},
+      timesync_unmatched{}, timesync_wrong_target{}, timesync_bad_rtt{};
+  int clock_sync_samples{};
   bool clock_ready{false}, estimator_ready{false}, reset_required{false};
   std::uint32_t last_message_id{};
   std::optional<int> odometry_frame_id, velocity_frame_id;
+  std::optional<int> timesync_target_system, timesync_target_component;
   std::string reason{"no_odometry"};
   double clock_error_s{};
   Json json() const;

@@ -74,7 +74,6 @@ Json Solution::json() const {
             {"depth_mad_m", optionalJson(depth_mad_m)}};
   j["bbox_xyxy"] =
       box ? Json::array({box->x1, box->y1, box->x2, box->y2}) : Json(nullptr);
-  j["model_sha256"] = model_sha256.empty() ? Json(nullptr) : Json(model_sha256);
   j["detection_valid"] = detection_valid;
   j["bearing_valid"] = bearing_valid;
   j["position_valid"] = position_valid;

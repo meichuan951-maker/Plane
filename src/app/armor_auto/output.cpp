@@ -1,4 +1,4 @@
-#include "output.hpp"
+#include "demo_aim/detail/app/armor_auto/output.hpp"
 #include <cmath>
 
 namespace aim::armor_auto_app {

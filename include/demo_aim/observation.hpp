@@ -25,7 +25,7 @@ struct ArmorFeatures {
   std::optional<std::array<cv::Point2d, 4>> corners;
   std::string layout_id;
 };
-// 单个检测结果：框、[0,1] 置信度、训练数据中的类别编号。
+// 单个检测结果：框、[0,1] 评分、颜色编号（0=红，1=蓝）。
 struct Detection {
   Box box;
   double confidence{};
@@ -48,7 +48,7 @@ struct Frame {
   Intrinsics intrinsics;
   // 上游已去畸变的针孔图像设为 true，否则必须提供 deproject 回调。
   bool rectified{false};
-  // 采集单调时间（秒）；实时源与 now 同时钟，回放使用独立虚拟时间。
+  // 采集单调时间（秒）；实时源与 now 同时钟，离线夹具使用独立虚拟时间。
   double capture_s{};
   // 实时和离线时钟不可混用；PX4 boot 时间不得直接填写进来。
   std::string time_domain{"host_monotonic"};
@@ -57,7 +57,7 @@ struct Frame {
   // RGB-D 时间差（秒）；clock_valid 表示 capture_s 已可与调用方 now 比较。
   double sync_error_s{};
   bool clock_valid{true};
-  std::string source{"replay"}, frame_id{"camera_color_optical_frame"};
+  std::string source{"unknown"}, frame_id{"camera_color_optical_frame"};
   // 可选回调 (u,v,z) → 相机三维点；实机由 SDK 处理畸变，未设置则用针孔模型。
   std::function<cv::Vec3d(double, double, double)> deproject;
 };
@@ -68,7 +68,7 @@ struct Solution {
   // 采集/处理时刻用秒，age_ms 用毫秒；emitted_s
   // 记录处理入口时刻，不含后续写盘延迟。
   double capture_s{}, emitted_s{}, age_ms{};
-  std::string source, frame_id, reason{"uninitialized"}, model_sha256;
+  std::string source, frame_id, reason{"uninitialized"};
   // valid 是 position_valid 的旧兼容字段，不得改成“检测到框”。
   bool valid{false}, aligned{false};
   bool detection_valid{false}, bearing_valid{false}, position_valid{false};
@@ -92,7 +92,7 @@ struct Solution {
 // 消费端再次检查观测时效；停止发布时仍需调用方自己的消息超时看门狗。
 bool isCurrent(const Solution &solution, double now, double max_age,
                const std::string &time_domain = "host_monotonic");
-// 二维消费者独立检查时效，回放需显式声明 replay_monotonic。
+// 二维消费者独立检查时效，离线夹具需显式声明对应的虚拟时钟域。
 bool isDetectionCurrent(const Solution &solution, double now, double max_age,
                         const std::string &time_domain = "host_monotonic");
 // steady_clock 单调秒数，不是 Unix 时间，也不是 ROS 时间戳。

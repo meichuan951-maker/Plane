@@ -1,5 +1,5 @@
-#include "../input/uvc_stream.hpp"
-#include "armor_auto/application.hpp"
+#include "demo_aim/detail/input/uvc_stream.hpp"
+#include "demo_aim/detail/app/armor_auto/application.hpp"
 #include <exception>
 #include <iostream>
 #include <string>

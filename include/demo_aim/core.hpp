@@ -4,7 +4,7 @@
 namespace aim {
 // 检测、深度质量、时间与锁定阈值；默认值是 Demo 参数，不是真机标定值。
 struct Config {
-  // 允许锁定的类别白名单，必须与自定义模型类别表对应。
+  // 允许锁定的颜色编号：0=红，1=蓝；不识别装甲数字身份。
   std::vector<int> class_ids{0};
   // 最低置信度与最小框边长（像素）。
   double confidence_min{.6}, min_box_px{6};
@@ -39,7 +39,7 @@ DepthEstimate estimateDepth(const cv::Mat &depth, const Box &box,
 class Pipeline {
 public:
   explicit Pipeline(Config config = {});
-  // 逐帧处理：时效 → 二维关联/确认 → 可选视线/深度；不含灯条提取或 PnP。
+  // 逐帧处理：时效 → 二维关联/确认 → 可选视线/深度；灯条提取在调用方完成。
   Solution process(const Frame &frame, const std::vector<Detection> &detections,
                    double now);
 

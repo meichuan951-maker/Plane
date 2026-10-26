@@ -1,4 +1,4 @@
-// 合成数据源：用于无相机、无模型时检查整条处理链，不能评估 YOLO 准确率。
+// 合成数据源：用于无相机时检查整条处理链，不能评估真实检测准确率。
 #include "demo_aim/input.hpp"
 #include <cmath>
 #include <limits>

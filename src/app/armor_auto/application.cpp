@@ -1,10 +1,10 @@
-#include "application.hpp"
-#include "../../input/uvc_stream.hpp"
-#include "../armor_calibrate.hpp"
-#include "../common/frame_rate.hpp"
-#include "options.hpp"
-#include "output.hpp"
-#include "preview.hpp"
+#include "demo_aim/detail/app/armor_auto/application.hpp"
+#include "demo_aim/detail/input/uvc_stream.hpp"
+#include "demo_aim/detail/app/armor_calibrate.hpp"
+#include "demo_aim/detail/app/common/frame_rate.hpp"
+#include "demo_aim/detail/app/armor_auto/options.hpp"
+#include "demo_aim/detail/app/armor_auto/output.hpp"
+#include "demo_aim/detail/app/armor_auto/preview.hpp"
 #include <chrono>
 #include <csignal>
 #include <cstdlib>

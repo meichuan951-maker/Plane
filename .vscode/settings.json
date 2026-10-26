@@ -1,0 +1,26 @@
+{
+  "cmake.sourceDirectory": "${workspaceFolder}",
+  "cmake.buildDirectory": "${workspaceFolder}/build",
+  "cmake.configureOnOpen": false,
+  "cmake.configureOnEdit": false,
+  "cmake.exportCompileCommandsFile": true,
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json",
+  "C_Cpp.default.cppStandard": "c++17",
+  "terminal.integrated.cwd": "${workspaceFolder}",
+  "search.exclude": {
+    "build/**": true,
+    "install/**": true,
+    "log/**": true,
+    "runs/**": true,
+    "**/__pycache__/**": true,
+    "**/.venv/**": true
+  },
+  "files.watcherExclude": {
+    "build/**": true,
+    "install/**": true,
+    "log/**": true,
+    "runs/**": true,
+    "**/__pycache__/**": true,
+    "**/.venv/**": true
+  }
+}

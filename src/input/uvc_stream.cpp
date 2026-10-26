@@ -1,5 +1,5 @@
-#include "uvc_stream.hpp"
-#include "uvc_stream_protocol.hpp"
+#include "demo_aim/detail/input/uvc_stream.hpp"
+#include "demo_aim/detail/input/uvc_stream_protocol.hpp"
 #include <algorithm>
 #include <cerrno>
 #include <cstring>

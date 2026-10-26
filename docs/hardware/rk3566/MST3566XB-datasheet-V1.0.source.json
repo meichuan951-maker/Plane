@@ -1,0 +1,17 @@
+{
+  "retrieved_date": "2026-10-22",
+  "source_url": "https://ditlcm.oss-cn-beijing.aliyuncs.com/chs/SBC/MST-XB-Series/MST3566XB-%E6%95%B0%E6%8D%AE%E6%89%8B%E5%86%8C-V1.0.pdf",
+  "manufacturer_product_page": "https://mstlcm.com/chs/products/industrial-xbseries-board/XB-RK3566",
+  "filename": "MST3566XB-datasheet-V1.0.pdf",
+  "sha256": "0a920decfa4e9f83ecbc19bd2bd2ff8517523ed78c7b2fb054f957beb3b395e1",
+  "pages": 12,
+  "document_revision": "V1.0",
+  "document_revision_date": "2024-12-02",
+  "connected_board_model_from_device_tree": "Marvsmart, RK3566 DDR4 V20 Board",
+  "exact_pcb_revision_match_confirmed": false,
+  "matching_note": "Reference only. User photo identifies RK3566-M2101, not MST3566XB. No public source establishing model equivalence was found. Do not apply this PDF connector definitions, supply specifications or firmware to M2101 without its own board documentation.",
+  "observed_product_model_from_user_photo": "RK3566-M2101",
+  "observed_capacity_label": "4+32G",
+  "observed_wireless_module": "AP6275S",
+  "identity_update_date": "2026-10-22"
+}

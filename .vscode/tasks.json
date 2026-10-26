@@ -1,0 +1,67 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "no_demo: 构建",
+      "type": "process",
+      "command": "bash",
+      "args": ["./scripts/build.sh"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": "$gcc",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "no_demo: 构建并运行离线回归",
+      "type": "process",
+      "command": "bash",
+      "args": ["./scripts/build.sh", "--test"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": "$gcc",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "no_demo: 视觉回归",
+      "type": "process",
+      "command": "ctest",
+      "args": ["--test-dir", "build", "-L", "vision", "--output-on-failure"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOn": "no_demo: 构建",
+      "problemMatcher": "$gcc",
+      "group": "test"
+    },
+    {
+      "label": "no_demo: 调试构建（Debug，复用 build）",
+      "type": "process",
+      "command": "bash",
+      "args": ["./scripts/build.sh", "--", "-DCMAKE_BUILD_TYPE=Debug"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": "$gcc",
+      "group": "build"
+    },
+    {
+      "label": "no_demo: 恢复 Release 构建",
+      "type": "process",
+      "command": "bash",
+      "args": ["./scripts/build.sh", "--", "-DCMAKE_BUILD_TYPE=Release"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": "$gcc",
+      "group": "build"
+    }
+  ]
+}

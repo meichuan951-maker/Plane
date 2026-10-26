@@ -1,5 +1,5 @@
-#include "options.hpp"
-#include "../common/parse.hpp"
+#include "demo_aim/detail/app/camera/options.hpp"
+#include "demo_aim/detail/app/common/parse.hpp"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -8,7 +8,7 @@ namespace aim::camera_app {
 namespace fs = std::filesystem;
 void help() {
   std::cout
-      << "USB camera / traditional red-blue light bar test (no YOLO or flight "
+      << "USB camera / traditional red-blue light bar test (no flight "
          "control)\n"
          "camera_light_test --device /dev/video4 [options]\n"
          "  --list                        List Linux video nodes; does not "
