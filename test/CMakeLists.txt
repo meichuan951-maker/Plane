@@ -88,10 +88,16 @@ add_test(NAME aim_build_tools_regression
   COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/build/test_build_tools.sh" "${PROJECT_SOURCE_DIR}")
 set_tests_properties(aim_build_tools_regression PROPERTIES LABELS build)
 
-# Offline Python checks cover control policies and benchmark tooling.
+# Offline Python checks cover MaixCAM Lite, control policies and benchmark tooling.
 # Optional fixture dependencies are not required by the C++ regressions.
 find_package(Python3 QUIET COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+  foreach(maix_test IN ITEMS stream armor_geometry armor_pipeline)
+    add_test(NAME aim_maixcam_${maix_test}_regression
+      COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/input/test_maixcam_${maix_test}.py")
+    set_tests_properties(aim_maixcam_${maix_test}_regression
+      PROPERTIES LABELS "input;vision;maixcam" TIMEOUT 15)
+  endforeach()
   foreach(yaw_test IN ITEMS policy mission)
     add_test(NAME aim_yaw_${yaw_test}_regression
       COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/io/test_yaw_${yaw_test}.py")

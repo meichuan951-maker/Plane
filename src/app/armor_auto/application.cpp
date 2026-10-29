@@ -143,11 +143,10 @@ int run(int argc, char **argv) {
       next_report = now + std::chrono::duration_cast<Clock::duration>(
                               std::chrono::duration<double>(1. / options.hz));
     }
-    if (options.show || !options.save_dir.empty()) {
+    if (options.show) {
       if ((updated || !status.current) && now >= next_draw) {
         overlay = drawPreview(raw, detection, target, config, context);
-        if (options.show)
-          cv::imshow(window, overlay);
+        cv::imshow(window, overlay);
         updated = false;
         next_draw = now + std::chrono::milliseconds(33);
       }

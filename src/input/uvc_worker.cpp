@@ -97,11 +97,10 @@ int cameraWorkerMain(int argc, char **argv) {
                 << " FPS; the requested frame rate was not accepted\n";
     CameraControls controls;
     bool controls_checked = std::string(argv[7]) != "1";
-    double restore_exposure_at = 0;
     cv::Mat raw;
     while (true) {
       StreamCommand command{};
-      // 滑块和按键按需下发。启动时只写一次预览默认值，不扫描焦点。
+      // 仅执行显式控制请求，不在取流启动时改写设备端成像参数。
       for (int i = 0;
            i < 16 && ::read(aim::kStreamCommandFd, &command, sizeof(command)) ==
                          static_cast<ssize_t>(sizeof(command));
@@ -117,23 +116,12 @@ int cameraWorkerMain(int argc, char **argv) {
         case CameraCommand::AutoFocus:
           ok = controls.setAutoFocus(command.value != 0);
           break;
-        case CameraCommand::ExposureRecovery:
-          ok = controls.pulseLongestShutter();
-          if (ok)
-            restore_exposure_at = streamTime() + 1;
-          else
-            controls.useAutoExposure();
-          break;
         }
         lockShared(shared);
         publishControls(shared, controls);
         shared->acknowledged = command.id;
         shared->command_ok = ok;
         pthread_mutex_unlock(&shared->mutex);
-      }
-      if (restore_exposure_at > 0 && streamTime() >= restore_exposure_at) {
-        controls.useAutoExposure();
-        restore_exposure_at = 0;
       }
       if (!camera.read(raw) || raw.empty())
         throw std::runtime_error("Camera read failed or USB disconnected");
@@ -163,8 +151,6 @@ int cameraWorkerMain(int argc, char **argv) {
       if (!controls_checked) {
         if (!controls.openDevice(argv[2]))
           std::cerr << "Warning: camera controls unavailable\n";
-        else
-          controls.applyPreviewDefaults();
         controls_checked = true;
       }
     }

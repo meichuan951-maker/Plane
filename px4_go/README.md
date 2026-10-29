@@ -19,7 +19,7 @@
 
 - [tools/benchmark_vision_control.py](../tools/benchmark_vision_control.py) 将 `offline_control` 与 C++ 录像视觉 worker 并行启动，统一测量窗口并采样资源；视觉结果不传给离线控制器。协议和统计口径见[联测指南](../docs/vision_control_benchmark.md)。
 - [src/app/armor_auto/](../src/app/armor_auto/) 生成 `yaw_follow` 消费的视觉 JSONL；其采集和识别分别复用 [src/input/](../src/input/README.md) 和 [src/vision/](../src/vision/README.md)。二维跟踪可以在 PnP 米制 `valid=false` 时使用，不能据此获得目标距离或视线角度。
-- [config/armor_auto.yaml](../config/armor_auto.yaml) 和 [config/light_bars.yaml](../config/light_bars.yaml) 配置视觉算法；偏航任务自己的运行配置、板端相机配置和 systemd 模板在 [deploy/rk3588/](../deploy/rk3588/README.md)，不读取 C++ 定位接收器的 `px4_link.yaml`。
+- [config/armor_auto.yaml](../config/armor_auto.yaml) 和 [config/light_bars.yaml](../config/light_bars.yaml) 配置视觉算法；偏航任务自己的运行配置、板端相机配置和 systemd 模板在 [部署配置](../deploy/rk3588/README.md)，不读取 C++ 定位接收器的 `px4_link.yaml`。
 - [src/io/](../src/io/README.md) 的 C++ MAVLink 定位诊断链路与本目录的 Python 串口控制相互独立；[src/navigation/](../src/navigation/README.md) 的离线任务意图也未接入这里的执行器。同一串口应由一个进程拥有，不能同时启动 `yaw_follow` 和 `px4_localization_cpp` 或原稿。
 - [test/io/](../test/io/) 中的 `test_px4_go_control.py`、`test_yaw_policy.py`、`test_yaw_mission.py` 和 `test_yaw_follow.py` 分别覆盖离线协议、像素策略、任务状态和运行器；[test/CMakeLists.txt](../test/CMakeLists.txt) 统一登记可用回归。
 
@@ -55,7 +55,7 @@ python3 -m px4_go.offline_control --benchmark-worker
 ## 无桌面视觉偏航入口
 
 `yaw_follow` 依赖 Python 3.10 及以上、`pymavlink`、PyYAML，以及已在目标板构建好的 `armor_auto`。
-按 [RK3588 部署说明](../deploy/rk3588/README.md) 填写本地运行配置和相机 YAML 后，可先只校验配置：
+按 [泰山派 RK3566 部署说明](../deploy/rk3588/README.md) 填写本地运行配置和相机 YAML 后，可先只校验配置：
 
 ```bash
 python3 -m px4_go.yaw_follow --config deploy/rk3588/yaw_follow.json --check-config

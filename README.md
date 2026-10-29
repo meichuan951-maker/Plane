@@ -1,17 +1,20 @@
 # 视觉无人机 Demo（C++17）
 
-面向 Orange Pi 5 8GB / Ubuntu 22.04 的视觉与导航开发工程。当前开发主线是
-**YLR4K USB/UVC 相机 + 传统红蓝灯条检测 + 装甲板跟踪 + 相机标定/PnP**，通过普通 UVC 接口采集。
-定位接入方案为 **MicoVIO → PX4 → 香橙派**，不使用 GPS；目前仍需独立完成实际融合与导航集成验收。
+面向泰山派（瑞芯微 RK3566，4GB 内存 + 32GB 存储）/ Ubuntu 22.04 ARM64 的视觉与导航开发工程。当前开发主线是
+**MaixCAM Lite 相机 + 传统红蓝灯条检测 + 装甲板跟踪 + 相机标定/PnP**。设备端通过 MaixPy/MaixVision 预览，主机端通过 UVC 接收彩色帧。
+定位接入方案为 **MicoVIO → PX4 → 泰山派 RK3566**，不使用 GPS；目前仍需独立完成实际融合与导航集成验收。
 
-仓库：[meichuan951-maker/Plane](https://github.com/meichuan951-maker/Plane)。文档更新：2026-10-26。
+当前板卡与系统已由用户确认；4GB 是运行内存，32GB 是存储容量。
+板端原生构建和配置见 [泰山派部署 README](deploy/rk3566/README.md)。旧文档中的香橙派选型、预算及 M2101 实测属于历史记录。
+
+仓库：[meichuan951-maker/Plane](https://github.com/meichuan951-maker/Plane)。文档更新：2026-10-28。
 
 运行命令见本页。开发顺序与验收目标见 [视觉无人机路线图](docs/visual_drone_roadmap.md)，
 数据/坐标/时间契约见 [接口说明](docs/interfaces.md)，选型与安装标定见 [硬件说明](docs/hardware.md)。
 2027 场地、仿真入口与两个工程的接口边界见 [RMUC 2027 集成说明](docs/rmuc2027_integration.md)。
 Astra Pro 专用程序、配置、启动脚本和历史记录已移至 [相机归档](archive/astra_pro_20261023/README.md)，
 原使用说明见 [历史用法与实验记录](archive/astra_pro_20261023/USAGE_legacy.md)。
-MaixCAM 预览、装甲识别、UVC 脚本及专用测试已移至 [MaixCAM 归档](archive/maixcam_20261025/README.md)，不再作为当前入口或参加默认回归。
+当前相机已确定为 **MaixCAM Lite**。预览、装甲识别、UVC 脚本与专用测试已恢复至 [tools/maixcam](tools/maixcam/README.md)，三组离线回归重新登记到默认 CTest；[归档目录](archive/maixcam_20261025/README.md) 仅保留历史快照。
 
 ## 规则依据与当前边界
 
@@ -197,9 +200,11 @@ ROS 2 开启前先加载对应环境。关闭功能时，CMake 配置阶段将�
 手动构建统一使用 `cmake -S . -B build`、`cmake --build build -j2` 和
 `ctest --test-dir build --output-on-failure` 命令；推荐脚本以统一配置、构建和回归入口。手动 CMake 配置也会归档关闭功能的残留产物。
 直接调用 CMake 时 `AIM_WITH_REALSENSE` 的原生默认值仍为 ON，SDK 缺失时跳过实时后端；
-其余可选功能默认 OFF。YLR4K 预览和检测使用普通 UVC 接口，无需厂商深度 SDK。
+其余可选功能默认 OFF。MaixCAM Lite 的主机端预览和检测使用 UVC 接口；设备端脚本依赖 MaixPy，不使用深度相机 SDK。
 后文按需重新启用相关选项；`demo_aim_cpp --help` 显示实际 RealSense/ROS 编译能力。
-x86_64 开发机程序不能直接复制到 ARM64 香橙派运行；`scripts/` 的库搜索路径也需按板端环境调整。
+x86_64 开发机程序不能直接复制到 ARM64 泰山派 RK3566 运行。板端使用 `JOBS=1 ./scripts/build.sh` 限制编译并行度，
+输出继续放在唯一的 `build/` 下；运行时直接使用 `./build/camera_light_test` 或 `./build/armor_auto`，
+不使用带有开发机 x86_64 库路径的相机启动脚本。具体命令见 [板端部署 README](deploy/rk3566/README.md)。
 
 也可以直接使用 `colcon` 构建本 CMake 包，不需要开启 ROS 2 功能：
 
@@ -220,11 +225,11 @@ ctest --test-dir build/no_demo_aim_cpp --output-on-failure
 当前数量以 `ctest --test-dir build -N` 为准，不等于测试程序内部断言数量。
 另外，有 Python 时增加资源采样和联测工具 2 项；有 pymavlink 时增加离线控制 1 项，
 有 Python OpenCV / NumPy 时增加录像 worker 1 项，均使用 `benchmark` 标签筛选。
-覆盖灯条提取/配对、姿态多解、自动装甲配置/跟踪/标定、深度平面、观测、坐标/任务、CLI 和 UVC 取流/控制。
+覆盖灯条提取/配对、姿态多解、自动装甲配置/跟踪/标定、深度平面、观测、坐标/任务、CLI、UVC 取流/控制，以及 MaixCAM Lite 的脚本路由和装甲几何。
 取流回归用独立进程模拟打开设备卡住、帧发布卡住、控制卡住、持锁进程退出、断流后恢复，以及扫焦期间持续预览；无需真实相机。
 `aim_build_tools_regression` 检查统一构建入口的缓存保留、参数约束和禁用目标归档。
 可用 `ctest --test-dir build -L vision --output-on-failure` 只运行视觉回归；
-其他分组标签为 `core`、`input`、`app`、`navigation`、`io`、`build`，`cli` 可筛选帮助页、离线演示和伪终端 CLI 验收。
+其他分组标签为 `core`、`input`、`app`、`navigation`、`io`、`build`、`maixcam`，`cli` 可筛选帮助页、离线演示和伪终端 CLI 验收。
 `aim_localization_cli_regression` 用伪终端验证静默/其他设备报文退出码、诊断与位姿验收、最终位姿过期和 Ctrl+C；不访问飞控。
 测试通过 `include/` 搜索根引用 `demo_aim/detail/...` 内部头；不再把 `src/` 加入头文件搜索路径。
 这些是开发机软件回归，不是相机识别准确率、板端实时性或真实飞行验收。
@@ -237,100 +242,33 @@ JSON 与预览使用处理完成后的帧龄；即使缓存中保留有效姿态
 切换前的构建验证与旧相机现场记录保存在[历史用法与实验记录](archive/astra_pro_20261023/USAGE_legacy.md)。
 软件回归不作为相机测量精度、板端性能或飞行验收结论。
 
-## YLR4K USB 相机：实时画面与红蓝灯条
+## MaixCAM Lite：实时画面与红蓝灯条
 
-参考 `sp_vision_25` 的独立相机/传统检测测试分层，以及传统识别器中亮度提取、颜色判断和装甲几何检查的分层，
-自行实现 UVC 输入、亮度与 HSV 颜色投票、几何候选配对和独立姿态估计。
-相机通过普通 UVC 接口采集，目标检测使用灯条颜色与几何关系。
-普通 UVC 相机通过 Linux `uvcvideo`、V4L2 和 OpenCV 采集；
-驱动接口见 [Linux UVC 文档](https://cdn.kernel.org/doc/html/latest/userspace-api/media/drivers/uvcvideo.html)。
-当前使用 YLR4K 相机模块，通过普通 UVC 彩色接口接入。通用 CLI 默认请求 640×480、30 FPS、MJPG；
-2026-10-25 已重新核验本机 Lombo `27c4:0531`，彩色节点为 `/dev/video4`，专用启动脚本使用稳定的 by-id 路径。
-历史 YLR4K（Lombo `27c4:0531`）测试记录保留在本节末尾，日期和适用范围保持原记录。
+当前只使用 **MaixCAM Lite** 作为前向彩色相机。设备端曝光、增益和图像参数在 MaixPy 脚本中设置；
+主机端 UVC 默认不查询或写入曝光/焦点/增益，不再应用旧相机的固定参数或最长快门恢复。
+通用 C++ UVC 采集、进程监管、共享最新帧和传统检测继续复用。
 
-本机当前已验证的预览配置（60 FPS 目标尚未实现）：
+详细步骤、SDK 条件和阈值调节见 [MaixCAM Lite 使用说明](tools/maixcam/README.md)。
 
-```bash
-./scripts/ylr4k_live.sh          # 1920×1080、MJPG、30 FPS，只开主预览
-./scripts/ylr4k_live.sh --mask   # 需要调灯条阈值时再开掩膜窗口
-```
-
-用户提供的商品参数表将 YLR800-4K、YLR1200-4K 都标为“最高 60 帧/秒”，
-但未注明对应分辨率、固件或启用步骤。本机 USB 名称仅为 `YLR4Kusb camera`，
-尚不能据此区分这两个具体型号，也不能把当前 UVC 枚举上限当作传感器的硬件上限。
-该设备当前 MJPG、YUYV、H264 的 UVC 枚举模式均最高 30 FPS，降低分辨率也未枚举出 60 FPS 档位。
-640×480 请求 60 FPS 后驱动实际协商为 30 FPS，300 帧纯采集实测 30.01 FPS；
-1280×720 和 1920×1080 MJPG 的 300 帧纯采集均约 30.02 FPS。
-补充绕过 OpenCV、检测与显示的驱动直采：640×360 下分别用 MJPG、YUYV、H264
-请求 60 FPS，每种跳过 15 个初始缓冲后采集 210 个缓冲，驱动均返回 30 FPS，未得到 60 FPS 输出。
-USB 原始描述符最短帧间隔也是 333333（100 ns 单位，约 30 FPS），没有 166666/166667 的 60 FPS 档。
-进一步核对 [Linux UVC 驱动源码](https://github.com/torvalds/linux/blob/v6.8/drivers/media/usb/uvc/uvc_v4l2.c)：
-`uvc_v4l2_set_streamparm` 会先用 `uvc_try_frame_interval` 按描述符调整请求周期，之后才向设备发送 PROBE。
-因此单凭上述 V4L2 测试还不能判断设备自身如何响应直接的 60 FPS 协商。
-随后已由用户执行管理员权限下的标准 UVC PROBE 测试，绕过 Linux 的帧间隔调整：
-MJPG 的 640×360、1280×720、1920×1080 都直接请求 166667（约 60 FPS），
-设备均返回 333333（约 30 FPS）；相应格式与分辨率索引正确，没有接受 60 FPS 请求。
-原 PROBE 已恢复，两个接口均重新绑定驱动，恢复报告没有错误，详见本机 `direct_probe.json`。
-为排除取整边界，又按 Linux `v4l2_fraction_to_interval(1, 60)` 的整数除法结果补测 166666，
-与前一轮 166667 相差 100 ns。640×360、720p、1080p 的设备响应仍全部为 333333，
-原 PROBE 与两个驱动接口再次恢复成功，没有恢复错误。
-两份完整结果分别保存在 `direct_probe_166667.json`、`direct_probe_166666.json`，均位于上述本机测试目录。
-这排除了仅由 Linux 描述符调整或这两个帧周期取整值造成回退的解释，
-确认本机当前配置在这三档 MJPG 标准协商下均未接受 60 FPS；不能据此断言传感器硬件最高只有 30 FPS。
-尚未找到与本机型号匹配的官方高帧率固件或扩展控制协议；需卖家明确该订单型号的
-60 FPS 分辨率、输出格式、开启步骤及匹配本机的原厂工具/固件。
-1920×1080 的主窗口加灯条检测连续验证 600 帧，稳定阶段 29.8–30.2 FPS，
-计入启动等待的全程平均 29.20 FPS，首帧等待 0.53 秒。
-目前暂用已验证的 1080p/30 FPS 预览；V4L2 以及上述直接标准 UVC PROBE 请求均回退到 30，60 FPS 目标尚未实现。
-原始枚举、测试日志和截图位于本机 `runs/ylr4k_tuning_20261025/`。
-这次只验证当前场景的吞吐与预览，光学对焦、照明和真实灯条识别效果仍需现场摆靶确认。
-
-`tools/probe_ylr4k_60fps.py` 用于上述直接标准 UVC 帧率协商测试，默认仅输出只读计划。
-166667 和 166666 两轮诊断均已完成，目前无需重复执行。
-后续取得新固件或模式信息后需重测时，先按 q 关闭相机预览，再在项目目录运行：
+1. **设备端直接预览与识别**：在 MaixVision 连接 MaixCAM Lite，运行
+   `tools/maixcam/preview_maixvision.py`。它使用 `display.send_to_maixvision()` 发送画面，
+   不依赖物理屏幕。默认请求 640×360 / 60 FPS，并输出实际循环 FPS 与分段耗时；60 是请求值，当前模式的实机帧率仍需连接设备验收。
+2. **主机端 C++ 检测**：先按上述使用说明在设备上配置 UVC，并运行
+   `tools/maixcam/stream_uvc.py`，再在连接相机的电脑或板端执行：
 
 ```bash
-sudo /usr/bin/python3 -I -B tools/probe_ylr4k_60fps.py --apply \
-  | tee runs/ylr4k_tuning_20261025/direct_probe_166666.json
+./scripts/maixcam_lite_live.sh --check  # 仅发现 MaixCAM 的采集节点与模式
+./scripts/maixcam_lite_live.sh          # 640×360 / MJPG / 请求 30 FPS，预览、灯条检测与掩膜
 ```
 
-该诊断需要管理员 USB 访问，限当前已校验布局的 `27c4:0531` 相机，测试 MJPG 的 640×360、720p、1080p。
-它只做临时 PROBE 协商，随后恢复原协商与驱动，不提交或启动视频传输。
-脚本会拒绝仍被占用的设备；接受 60 FPS 协商仍需后续真实采集验证，不能当作已经达到 60 FPS。
-诊断结束后可用 `./scripts/ylr4k_live.sh` 恢复已验证的预览。
+启动器按相机 USB 归属查找采集节点，避免插拔编号变化或误用内置摄像头；没有匹配设备时明确退出。
+设备端 MaixVision 与 UVC 推流入口需分别运行，一次只让一个脚本占用设备相机。
+两条路径的帧率分别测量，设备请求 60 FPS 不表示主机 UVC 已提供 60 FPS。
 
-编译后在**连接相机的桌面终端**执行，先关闭 ffplay/其他预览程序：
-
-```bash
-cd /home/user/nohuman_plane_std/no_demo
-./build/camera_light_test --list
-# /dev/video0 仅为示例，替换成上一步找到的彩色 Video Capture 节点。
-./build/camera_light_test --device /dev/video0 \
-  --width 640 --height 480 --fps 30 --format MJPG --config config/light_bars.yaml --mask
-```
-
-同一相机可能暴露多个节点，插拔后编号可能变化。安装了 `v4l2-ctl` 时可用
-`v4l2-ctl --list-devices` 和 `v4l2-ctl -d /dev/video0 --all` 确认 Video Capture；
-优先使用 `/dev/v4l/by-id/` 下实际存在的稳定路径。
-默认灯条参数为 `config/light_bars.yaml`，应根据 YLR4K 的真实曝光与画面重新调整。
-
-默认请求 MJPG、640×480、30 FPS；使用 `--width`、`--height`、`--fps`、`--format MJPG|YUYV` 调整。
-设备不一定接受请求参数，启动日志显示请求值和驱动协商值，低于请求帧率时明确警告，叠加显示实际图像尺寸。
-FPS 是最近约一秒完成的“采集+检测+显示”吞吐，首次统计前显示 0，不是传感器帧率或端到端延迟。
-`detect ms` 只统计灯条算法耗时。带控制的预览在第一帧后应用设备支持的预览默认值：自动曝光、增益、数字锐度和连续自动对焦；不等待亮度稳定或自动扫描整个焦点范围。第一帧到达即开始预览，终端报告首帧等待时间。`--no-controls` 和无窗口模式跳过这些控制写入。不自动修改 USB 电源设置，USB 超时也不能直接认定为自动休眠。
-
-取流和控制在独立受监控子进程中执行，主进程负责窗口、检测及按键。共享内存只保留最新一帧，慢消费者不会积压旧帧。连续 3 秒没有新帧会终止本轮采集并重试，默认恢复预算为 15 秒（加上至多一次 3 秒设备等待）；`--reconnect-seconds N` 可调整，0 表示失败即退出。相机物理掉线或固件无响应时，仍可能需要重新插接/换线，软件重试不保证恢复设备。等待超过 250 ms 时显示等待提示并清空旧轮廓/掩膜；等待、重连和驱动卡住期间均可按 q/Esc 或 Ctrl+C 退出。不会无限等待子进程释放失效的设备。
-
-主窗口有 Focus 和 Gain。把装甲放在工作距离上，按 `f` 才开始手动扫焦，按 `a` 启用相机自身连续自动对焦。扫焦由正常预览的新帧逐步驱动，窗口持续刷新，拖动 Focus 或按 a/e 可取消扫描。每个位置读回确认后等待至少 350 ms，再取三帧中心清晰度的中值；扫描包含范围两端。拖动滑块的请求节流到最多约每 100 ms 一次；失败给出警告并恢复读回值。对焦读回正确只证明驱动接受参数，不证明镜头运动或已经对准目标。
-
-历史 YLR4K 冷启动时曾出现黑帧。如确实全黑，可按 `e` 尝试最长快门后恢复自动曝光；该操作按需执行，不再拖慢默认启动。`--no-controls` 可运行带窗口的纯取流预览，跳过曝光/焦点/增益查询和写入，用于区分取流与控制故障。无窗口测试也不改相机控制。
-
-画面发虚时，先固定相机、增加目标照明，检查镜头保护膜和污渍。比较约 1 m 和实际工作距离下的黑白文字，缓慢扫描 Focus 的完整范围；若读回数值变化而画面始终不变，继续核对镜头是否支持电动调焦，排查调焦机构、模组固件或机械焦点，不能仅凭滑块认定已对焦。Gain 和灯条阈值不能恢复失焦细节。
-历史 YLR4K 驱动报告 MJPG 支持 1920×1080/30 FPS。设备确实支持该模式时，可用以下命令比较原始细节；实际协商尺寸仍以启动日志为准，提高分辨率不解决光学失焦：
-
-```bash
-./build/camera_light_test --device /dev/video0 --width 1920 --height 1080 --fps 30 --format MJPG
-```
+C++ 程序默认使用 `config/light_bars.yaml`；MaixPy 使用 LAB 阈值，不能直接套用 OpenCV HSV 参数。
+`FPS` 是最近约一秒完成的新帧处理吞吐，`detect ms` 只统计灯条算法耗时。
+断流重试和等待界面不沿用旧检测结果；帧过期时清空结果，退出会回收采集进程。
+相机标定必须来自当前 MaixCAM Lite、镜头和实际输出分辨率。
 
 - 正常取流时显示真实画面，红/蓝轮廓和端点表示相应颜色的细长候选，顶部给出灯条和装甲数量；断流期间显示等待提示，不沿用旧检测结果。
 - 同色、近似平行的两根灯条经长度比、中心距、纵向偏移和矩形一致性筛选，绿色四边形表示几何装甲候选（左上、右上、右下、左下）。只有最靠近画面中心的一块显示 yaw/pitch。
@@ -341,7 +279,7 @@ FPS 是最近约一秒完成的“采集+检测+显示”吞吐，首次统计�
   它不表示亮度或最小面积。`min_value`（Min V）才控制亮度门限。
 - `s` 保存原图、叠加图、两张掩膜和当时的 `light_bars.yaml` 到 `runs/camera_snapshots/` 下的新目录。
 - `q`、Esc 或 Ctrl+C 退出；支持可见性查询的窗口后端也可关闭主窗口退出。取流失败会在预算内重试，预算耗尽后报错退出。
-- 无桌面验收：`./build/camera_light_test --device /dev/video0 --no-show --frames 120 --save-dir runs/usb_check_01`。
+- 无桌面验收：`./build/camera_light_test --device MAIXCAM_CAPTURE_NODE --width 640 --height 360 --fps 30 --no-controls --no-show --frames 120 --save-dir runs/usb_check_01`（先将节点占位替换为 `--check` 确认的 MaixCAM Lite 节点）。
   保存目录必须尚不存在；正常退出且仍有新鲜画面时保存最后一帧，断流时不保存旧帧。
 - 离线重测截图：`./build/camera_light_test --image runs/usb_check_01/raw.png --mask`；
   加 `--no-show` 只处理一次，或 `--frames N` 限制处理次数。静态图片不显示相机 FPS。
@@ -370,23 +308,9 @@ FPS 是最近约一秒完成的“采集+检测+显示”吞吐，首次统计�
 红蓝细长物体也可能通过筛选。角度依赖灯条端点和上述尺寸；这个入口不输出米制距离、装甲数字身份或飞控指令。
 本程序不接串口、不输出飞行控制指令。
 
-2026-10-08 本轮识别优化的离线耗时对比：640×480、OpenCV 两线程、每场景预热 20 次并测量 300 次。
-常规 8 根灯条/4 个候选平均 0.67 ms（原版 0.62 ms）；白芯场景平均 0.67 ms，提取 8 根灯条/4 个候选，
-原版 0.63 ms 但未提取到灯条；108 根灯条的合成杂乱场景平均 1.02 ms（原版 0.76 ms）。
-新增颜色和几何质量检查带来少量额外耗时，这些数字只统计未配置相机内参的检测，不包含取流、显示或真实场景准确率。
-
-2026-10-07 开发机实测：该 YLR4K 相机分别通过无窗口和带窗口/掩膜模式的 120 帧测试，
-640×480 MJPG 下稳定处理约 30 FPS，包含启动等待的全程平均约 27.7 FPS。
-当时画面偏暗且没有可见灯条；这只验证取流/显示和处理性能，真实红蓝灯条识别效果仍需现场摆靶验证。
-
-2026-10-08 优化后实测：无窗口和虚拟桌面带窗口/掩膜模式分别连续处理 2700 帧，
-运行约 90.5 秒，全程平均分别为 29.83 / 29.88 FPS，首帧等待分别为 0.54 / 0.50 秒；
-两轮测试期间未出现新的 USB 错误或采集子进程遗留。带窗口测试保留相机当前参数，未触发扫焦或曝光恢复。
-这些结果验证启动与持续取流，不代表光学对焦、灯条识别或物理掉线后的恢复已经验收。
-
 ## 自动装甲识别、跟踪与 RGB 相机标定
 
-当前自动装甲视觉入口使用 `armor_auto`，**使用 YLR4K 的 UVC 彩色帧，不需要鼠标框选**：每个新彩色帧提取灯条、组合装甲候选，
+当前自动装甲视觉入口使用 `armor_auto`，**使用 MaixCAM Lite 的 UVC 彩色帧，不需要鼠标框选**：每个新彩色帧提取灯条、组合装甲候选，
 按配置筛选颜色，连续 3 帧确认后选定目标。在关联距离/尺寸门限内保持同一目标，检测丢失立即使当前结果无效；
 超过 0.25 s 后重新搜索。`track_id` 是临时跟踪编号，不是装甲数字身份，当前未接入数字分类器。
 
@@ -396,15 +320,15 @@ FPS 是最近约一秒完成的“采集+检测+显示”吞吐，首次统计�
 target_color: 1 # 蓝色；改为 2 选择红色。修改后重启程序。
 ```
 
-当前默认 `1`（蓝色），不识别板上的数字。先根据 `camera_light_test --list` 的结果修改配置中的
+当前默认 `1`（蓝色），不识别板上的数字。先根据 `./scripts/maixcam_lite_live.sh --check` 的结果修改配置中的
 `camera.device`、`width`、`height`、`fps` 和 `format`，不要直接照搬别人的设备编号。
-默认配置面向 YLR4K：`/dev/video0` 为待核验的设备占位，640×480、30 FPS、MJPG 为请求模式。
+默认配置面向 MaixCAM Lite：设备路径为有意保留的 `REPLACE_ME_MAIXCAM_LITE` 占位，需填写已发现的实际节点或稳定路径；请求 640×360、30 FPS、MJPG。
 本次未验证当前硬件是否接受这些参数；驱动实际尺寸不一致时，`armor_auto` 会报错退出。
 
 当前测试目标已确认灯条中心距 0.135 m、发光长度 0.056 m；换装甲板必须更新实际尺寸，
 核对后才可设置 `armor.dimensions_confirmed: true`。
 `detector_config` 使用通用 `config/light_bars.yaml`；`rgb_calibration` 指向尚未提供的
-`config/ylr4k_rgb_calibration.yaml`，需为当前 YLR4K、镜头、对焦状态和分辨率独立标定，不能复用旧相机参数。
+`config/maixcam_lite_rgb_calibration.yaml`，需为当前 MaixCAM Lite、镜头、对焦状态和分辨率独立标定，不能复用旧相机参数。
 两个路径在主配置中均相对于主配置所在目录解析。
 
 ```bash
@@ -426,7 +350,7 @@ JSON 默认以 10 Hz 输出，`--hz 1..60` 控制报告频率，不改变相机 
 可用 `--image FILE --no-show` 检查单张同分辨率图片；它只处理一帧，不用于验证连续确认或动态跟踪。
 
 距离来源为**已标定彩色相机 + 实际装甲尺寸的 PnP**。
-缺少 `config/ylr4k_rgb_calibration.yaml` 时仍可自动识别/跟踪，但 `valid=false`，距离、XYZ、角度为 `null`。
+缺少 `config/maixcam_lite_rgb_calibration.yaml` 时仍可自动识别/跟踪，但 `valid=false`，距离、XYZ、角度为 `null`。
 标定文件尺寸必须与采集分辨率一致，矩阵/畸变须有限且合理；不能填入网上同型号相机或其它相机的焦距。
 板面 IPPE 两种姿态接近同样可信时，返回 `pose_ambiguous`，不输出唯一朝向。
 
@@ -456,9 +380,9 @@ JSON 的 `position_camera_m` 是装甲中心在 **RGB 光学系**中的坐标，
 断流或未通过质量检查时距离/角度为 `null`。
 这是视觉结果接口，输出机体/地图坐标仍需安装外参和机体位姿；本入口没有接入飞行控制。
 
-## RK3588 开机自启与视觉偏航
+## 泰山派 RK3566 开机自启与视觉偏航
 
-Ubuntu 22.04 无桌面启动入口及部署步骤见 [RK3588 自启动说明](deploy/rk3588/README.md)。
+Ubuntu 22.04 无桌面启动入口及部署步骤见 [泰山派自启动说明](deploy/rk3588/README.md)。
 新增 `python3 -m px4_go.yaw_follow` 管理无窗口视觉及唯一的 PX4 串口，
 执行单次自动起飞、原地保持位置/高度与目标水平居中任务；原始 `gogogo.py` 保留。
 相机未标定时只用二维像素误差，不提供目标距离或视线角度。
@@ -547,7 +471,7 @@ python3 tools/benchmark_vision_memory.py profile --duration 60 \
 若相机重连/失败或仅预览空画面，本次内存值不能代表正常工作的采集链。
 
 采购时将算法结果与目标板的系统、采集、ROS/定位等实际峰值合并，另留余量。
-PC OpenCV CPU 测量不等于香橙派 ARM64 实测；增加内存容量也不能保证处理帧率。
+PC OpenCV CPU 测量不等于泰山派 RK3566 ARM64 实测；增加内存容量也不能保证处理帧率。
 
 ## 可选 RealSense RGB-D 观测
 
@@ -589,7 +513,7 @@ D435i 已连接且 SDK 已编译时，`demo_aim_cpp` 使用现有传统灯条检
 依据实际固件核对融合 ODOMETRY 语义后将 `px4_odometry_contract_confirmed` 设为 true。
 默认占位设备会被拒绝；约定未确认时仅提供报文诊断，不输出可导航定位。
 
-MicoVIO 接飞控的传感器链路，香橙派接另一条遥测链路。PX4 应在实际连接香橙派的 MAVLink 实例中提供：
+MicoVIO 接飞控的传感器链路，泰山派 RK3566 接另一条遥测链路。PX4 应在实际连接泰山派 RK3566 的 MAVLink 实例中提供：
 
 - `HEARTBEAT`：身份与状态，默认 1 s 超时。
 - `ODOMETRY`：融合位置、姿态、速度、协方差、复位计数；建议从 30～50 Hz 台架观察。
@@ -667,4 +591,4 @@ QoS reliable/volatile、队列 1；仅支持实时相机发布。没有 tf、其
 
 分阶段通过条件见 [视觉无人机路线图](docs/visual_drone_roadmap.md)。
 当前世界目标协方差仍为空；PnP 测距精度、多目标身份、传统检测准确率、室外深度、
-ROS 实际传输、香橙派持续性能和完整实机闭环均未由软件回归证明。所有真机几何和控制阈值都需实测。
+ROS 实际传输、泰山派 RK3566 持续性能和完整实机闭环均未由软件回归证明。所有真机几何和控制阈值都需实测。

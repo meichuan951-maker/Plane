@@ -14,7 +14,7 @@
   控制命令传递、断流检测、有界重连和停止清理。
 - [`uvc_worker.cpp`](uvc_worker.cpp)：UVC 子进程，通过 OpenCV/V4L2 打开设备、设置采集格式并发布图像与设备状态。
   它通过应用自身的 `--camera-worker` 分支运行，不是单独安装的可执行程序。
-- [`uvc_controls.cpp`](uvc_controls.cpp)：使用 Linux V4L2 查询和设置设备实际支持的曝光、增益、对焦等控制项。
+- [`uvc_controls.cpp`](uvc_controls.cpp)：提供可选的 Linux V4L2 对焦/增益控制；MaixCAM Lite 默认跳过主机控制查询，成像参数由设备端 MaixPy 设置。
 - [`uvc_stream_protocol.cpp`](uvc_stream_protocol.cpp)：提供进程间采集协议使用的单调时钟函数；
   共享帧、状态和命令结构定义在内部头文件中。
 
@@ -46,9 +46,10 @@ src/app/camera、src/app/armor_auto、src/app/armor_calibrate.cpp
   [`../../include/demo_aim/detail/input/`](../../include/demo_aim/detail/input/) 存放 UVC 采集、硬件控制与进程协议的内部头文件。
 - [`../../docs/interfaces.md`](../../docs/interfaces.md)：图像、坐标和时钟契约；合成输入使用虚拟时间，实时采集使用本机单调时钟。
 - [`../../config/armor_auto.yaml`](../../config/armor_auto.yaml)：自动装甲入口的设备、格式、分辨率和帧率设置；
-  [`../../scripts/`](../../scripts/) 提供 `armor_auto.sh`、`ylr4k_live.sh` 等启动入口。
+  [`../../scripts/armor_auto.sh`](../../scripts/armor_auto.sh) 启动装甲识别，
+  [`../../tools/maixcam/run_light_test.py`](../../tools/maixcam/run_light_test.py) 按 MaixCAM Lite 的设备身份选择 UVC 节点并启动预览。
   参数由应用层解析后传给采集模块，采集实现不自行加载这些 YAML。
-- [`../../tools/probe_ylr4k_60fps.py`](../../tools/probe_ylr4k_60fps.py)：独立的相机格式/帧率探测工具；
+- [`../../tools/maixcam/`](../../tools/maixcam/)：MaixCAM Lite 设备端采集、MaixVision 预览和 UVC 推流脚本；
   `tools/vision_video_worker.cpp` 使用自己的录像读取循环，不经过这里的 UVC 采集器。
 - [`../../test/input/`](../../test/input/)：用模拟采集进程和控制封装验证帧传递、超时、重连及停止等行为；
   [`../../test/core/test_aim.cpp`](../../test/core/test_aim.cpp) 同时验证合成输入与视觉流水线。

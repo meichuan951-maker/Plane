@@ -2,6 +2,11 @@
 
 归档日期：2026-10-25（Asia/Shanghai）。按要求从当前开发入口移除 MaixCAM，保留代码、文档和测试以便查阅或恢复。
 
+2026-10-28：当前相机已确定为 **MaixCAM Lite**，开发副本与三组测试已恢复到主工程的
+[`tools/maixcam/`](../../tools/maixcam/README.md) 和 `test/input/`，并重新登记默认 CTest。
+本目录继续保留 2026-10-25 的历史快照；下文“移除”“不再登记”等描述仅指归档当时，
+当前运行请使用主工程入口，不要直接运行这里的历史副本。
+
 文件按原项目相对路径保存：
 
 - `tools/maixcam/preview_maixvision.py`：MaixVision 预览、FPS、手动曝光、传统灯条与装甲候选检测。

@@ -1,10 +1,10 @@
 {
   "project_dir": "/home/user/REPLACE_ME/no_demo",
   "vision_binary": "build/armor_auto",
-  "vision_config": "deploy/rk3588/armor_ylr4k.example.yaml",
-  "camera_device": "/dev/v4l/by-id/REPLACE_ME_YLR4K",
+  "vision_config": "deploy/rk3588/armor_maixcam_lite.example.yaml",
+  "camera_device": "/dev/v4l/by-id/REPLACE_ME_MAIXCAM_LITE",
   "width": 640,
-  "height": 480,
+  "height": 360,
   "connection": "/dev/serial/by-id/REPLACE_ME_PX4",
   "baud": 57600,
   "target_system": 1,

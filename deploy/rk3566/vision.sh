@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run inside rk-ros2; use native ARM64 binaries and the project's YLR4K config.
+# Run inside rk-ros2; use native ARM64 binaries and the project's MaixCAM Lite UVC config.
 set -euo pipefail
 
 usage() {
@@ -8,7 +8,7 @@ usage() {
   list        列出相机设备，不打开视频流
   camera      UVC 灯条预览，沿用 armor_auto.yaml 的相机参数，可用参数覆盖
   armor       自动装甲识别，使用 config/armor_auto.yaml
-  calibrate   标定当前 YLR4K；须提供棋盘格参数
+  calibrate   标定当前 MaixCAM Lite；须提供棋盘格参数
 
 示例：
   .../vision.sh list
@@ -54,7 +54,7 @@ import yaml
 config_path = Path('config/armor_auto.yaml')
 config = yaml.safe_load(config_path.read_text())
 camera = config['camera']
-args = [sys.argv[1], '--config', str(config_path.parent / config['detector_config'])]
+args = [sys.argv[1], '--no-controls', '--config', str(config_path.parent / config['detector_config'])]
 for field in ('device', 'width', 'height', 'fps', 'format'):
     args.extend(['--' + field, str(camera[field])])
 os.execv(sys.argv[1], args + sys.argv[2:])

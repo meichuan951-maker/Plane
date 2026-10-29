@@ -65,6 +65,10 @@ int main(int argc, char **argv) {
     std::filesystem::create_directories(dir);
     node["detector_config"] =
         (base / node["detector_config"].as<std::string>()).string();
+    // Calibration fixtures below use their own 640x480 camera, independent of
+    // the deployed camera's configured output resolution.
+    node["camera"]["width"] = 640;
+    node["camera"]["height"] = 480;
     node["rgb_calibration"] = (dir / "camera.yaml").string();
     {
       std::ofstream f(dir / "auto.yaml");

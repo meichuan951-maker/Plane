@@ -4,11 +4,15 @@
 #include <cmath>
 #include <stdexcept>
 namespace aim {
-// 校验图像尺寸、焦距和内参数值，非法输入抛出异常。
+// 未标定是允许的二维运行状态，逐帧查询不通过异常传递。
+bool Intrinsics::isValid() const noexcept {
+  return width > 0 && height > 0 && fx > 0 && fy > 0 &&
+         std::isfinite(fx) && std::isfinite(fy) && std::isfinite(cx) &&
+         std::isfinite(cy);
+}
+// 显式配置校验仍对非法输入抛出异常。
 void Intrinsics::validate() const {
-  if (width <= 0 || height <= 0 || fx <= 0 || fy <= 0 ||
-      (!std::isfinite(fx) || !std::isfinite(fy) || !std::isfinite(cx) ||
-       !std::isfinite(cy)))
+  if (!isValid())
     throw std::invalid_argument("Invalid camera intrinsics");
 }
 // 针孔反投影：X=(u-cx)Z/fx，Y=(v-cy)Z/fy；Z 是轴向深度而非欧氏距离。

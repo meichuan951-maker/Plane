@@ -15,11 +15,13 @@ bool finite(std::initializer_list<double> values) {
   return std::all_of(values.begin(), values.end(),
                      [](double v) { return std::isfinite(v); });
 }
-// 按值复制后排序计算中位数；调用方必须先保证样本非空。
-double median(std::vector<double> values) {
-  std::sort(values.begin(), values.end());
-  const auto n = values.size();
-  return n % 2 ? values[n / 2] : (values[n / 2 - 1] + values[n / 2]) / 2;
+// 原地选择中位数，避免复制和完整排序；调用方保证样本非空。
+double median(std::vector<double> &values) {
+  const auto middle = values.begin() + values.size() / 2;
+  std::nth_element(values.begin(), middle, values.end());
+  if (values.size() % 2)
+    return *middle;
+  return (*std::max_element(values.begin(), middle) + *middle) / 2;
 }
 } // namespace
 // 集中校验配置，使 YAML 加载和直接构造 Pipeline 使用相同约束。
@@ -134,12 +136,15 @@ DepthEstimate estimateDepth(const cv::Mat &depth, const Box &b,
     return out;
   }
   std::vector<double> values;
-  for (int y = y1; y < y2; ++y)
+  values.reserve(static_cast<std::size_t>(x2 - x1) * (y2 - y1));
+  for (int y = y1; y < y2; ++y) {
+    const auto *row = depth.ptr<float>(y);
     for (int x = x1; x < x2; ++x) {
-      const double v = depth.at<float>(y, x);
+      const double v = row[x];
       if (std::isfinite(v) && v >= c.depth_min_m && v <= c.depth_max_m)
         values.push_back(v);
     }
+  }
   // 先排除缺失、非有限和超范围深度；样本数量及占比都必须合格。
   out.valid_ratio =
       static_cast<double>(values.size()) / ((x2 - x1) * (y2 - y1));
@@ -151,6 +156,7 @@ DepthEstimate estimateDepth(const cv::Mat &depth, const Box &b,
   // 中位数抗少量离群值；MAD 反映样本的离散程度。
   const double z = median(values);
   std::vector<double> deviations;
+  deviations.reserve(values.size());
   for (double v : values)
     deviations.push_back(std::abs(v - z));
   out.mad = median(deviations);
@@ -159,15 +165,16 @@ DepthEstimate estimateDepth(const cv::Mat &depth, const Box &b,
     return out;
   }
   // MAD 很小时使用绝对容差下限；若不足 80% 样本属于主层，视为前后景混合。
-  std::vector<double> inliers;
-  for (double v : values)
-    if (std::abs(v - z) <= std::max(3 * (*out.mad), c.depth_max_mad_m))
-      inliers.push_back(v);
-  if (static_cast<double>(inliers.size()) / values.size() < .8) {
+  const auto sample_count = values.size();
+  const double tolerance = std::max(3 * (*out.mad), c.depth_max_mad_m);
+  values.erase(std::remove_if(values.begin(), values.end(),
+                              [&](double v) { return std::abs(v - z) > tolerance; }),
+               values.end());
+  if (static_cast<double>(values.size()) / sample_count < .8) {
     out.reason = "mixed_depth_layers";
     return out;
   }
-  out.depth = median(inliers);
+  out.depth = median(values);
   out.reason = "ok";
   return out;
 }
@@ -234,14 +241,9 @@ Solution Pipeline::process(const Frame &f,
   last_capture_ = f.capture_s;
   if (f.color_bgr.empty() || f.color_bgr.type() != CV_8UC3)
     return reject("invalid_color_image", true);
-  bool calibrated = false;
-  try {
-    f.intrinsics.validate();
-    calibrated =
-        cv::Size(f.intrinsics.width, f.intrinsics.height) == f.color_bgr.size();
-  } catch (const std::invalid_argument &) {
-  }
   const auto &k = f.intrinsics;
+  const bool calibrated = k.isValid() &&
+                          cv::Size(k.width, k.height) == f.color_bgr.size();
   const cv::Point2d reference =
       calibrated ? cv::Point2d(k.cx, k.cy)
                  : cv::Point2d(f.color_bgr.cols / 2., f.color_bgr.rows / 2.);

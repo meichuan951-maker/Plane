@@ -1,6 +1,9 @@
-# RK3588 上电自动启动视觉与 PX4 偏航跟随
+# 泰山派 RK3566 上电自动启动视觉与 PX4 偏航跟随
 
-适用目标：RK3588、Ubuntu 22.04、用户 `user`，无显示器、无需登录桌面。`systemd` 启动 `python -m px4_go.yaw_follow`，该进程管理无窗口 `armor_auto` 和唯一的 MAVLink 串口连接。
+适用目标：泰山派（瑞芯微 RK3566，4GB 内存 + 32GB 存储）、Ubuntu 22.04 ARM64，示例用户为 `user`，部署时填写实际用户名。无显示器、无需登录桌面。`systemd` 启动 `python -m px4_go.yaw_follow`，该进程管理无窗口 `armor_auto` 和唯一的 MAVLink 串口连接。
+
+更新：2026-10-28。本目录保留 `rk3588` 历史路径，以保持既有配置引用；当前目标板是泰山派 RK3566。
+板端环境入口见 [泰山派部署 README](../rk3566/README.md)，原安装脚本和目录结构保持原样。
 
 运行器沿用 `gogogo.py` 的预发送 setpoint、OFFBOARD、自动解锁握手方式。原稿保留，本服务运行时不要再运行 `gogogo.py` 或另起 `px4_localization_cpp` 占用同一串口。这里的 PX4 是独立飞控，板端无需启动 PX4 固件进程。
 
@@ -16,14 +19,14 @@
 
 ```bash
 cp deploy/rk3588/yaw_follow.example.json deploy/rk3588/yaw_follow.json
-cp deploy/rk3588/armor_ylr4k.example.yaml deploy/rk3588/armor_ylr4k.yaml
+cp deploy/rk3588/armor_maixcam_lite.example.yaml deploy/rk3588/armor_maixcam_lite.yaml
 ```
 
 编辑 JSON：
 
 - `project_dir`：目标板项目绝对路径，替换 `/home/user/REPLACE_ME/no_demo`。
-- `vision_config`：改为 `deploy/rk3588/armor_ylr4k.yaml`。
-- `camera_device`、`connection`：填写目标板核验过的相机和飞控稳定路径，例如各自的 `/dev/v4l/by-id/…`、`/dev/serial/by-id/…`；串口波特率与飞控保持一致。
+- `vision_config`：改为 `deploy/rk3588/armor_maixcam_lite.yaml`。
+- `camera_device`、`connection`：填写目标板核验过的 MaixCAM Lite 和飞控稳定路径，例如各自的 `/dev/v4l/by-id/…`、`/dev/serial/by-id/…`；串口波特率与飞控保持一致。
 - `flight_height_m`：填写相对本次起飞位置的高度，单位米。
 - `target_loss_action`：自行选择 `"land"` 或 `"hold"`。`land` 在目标丢失时立即停止偏航、保持 XY 和高度，等待配置的超时后降落；`hold` 立即将偏航角速度归零并保持 XY 和高度，等待目标恢复后继续跟随，仍受任务总时长限制。
 - `target_loss_timeout_s`：`land` 策略下目标持续丢失到降落的等待秒数。`hold` 不按此时限降落，但该字段仍需填入配置允许的数值。
@@ -32,16 +35,16 @@ cp deploy/rk3588/armor_ylr4k.example.yaml deploy/rk3588/armor_ylr4k.yaml
 
 `auto_arm` 已按自动起飞要求设为 `true`。`max_yaw_rate_rad_s` 限制偏航角速度，`yaw_gain_rad_s` 为水平归一化误差的增益，`deadband_normalized` 为居中死区；`yaw_direction` 控制误差符号。初始数值是配置起点，需要板端验证。
 
-编辑相机 YAML，使 `camera.device`、`width`、`height` 与 JSON 一致。示例为 640×480、30 FPS、MJPG；先核验 YLR4K 实际支持的模式，必要时改为 YUYV。颜色 `1` 是蓝色，`2` 是红色。灯条阈值使用 `../../config/light_bars.yaml`，也需按这台相机的曝光与真实画面调整。
+编辑相机 YAML，使 `camera.device`、`width`、`height` 与 JSON 一致。当前相机为 MaixCAM Lite，示例请求 640×360、30 FPS、MJPG。先按 [MaixCAM Lite 接入说明](../../tools/maixcam/README.md) 在设备端启用 UVC 并持续推流，再核验目标板实际枚举到的模式；这组请求值不代表已经实测达到相应帧率。颜色 `1` 是蓝色，`2` 是红色。灯条阈值使用 `../../config/light_bars.yaml`，也需按这台相机的曝光与真实画面调整。
 
-`rgb_calibration` 指向有意未提供的 `ylr4k_rgb_calibration.yaml`，`dimensions_confirmed` 保持 `false`，用于明确本次没有米制 PnP。不要借用其他相机的标定或将示例装甲尺寸视为现场实测值。
+`rgb_calibration` 指向有意未提供的 `maixcam_lite_rgb_calibration.yaml`，`dimensions_confirmed` 保持 `false`，用于明确本次没有米制 PnP。不要借用其他相机的标定或将示例装甲尺寸视为现场实测值。
 
 ## 构建和离线检查
 
-在 RK3588 上构建 ARM64 可执行文件，不能复制开发电脑上的 x86_64 程序：
+在泰山派 RK3566 上构建 ARM64 可执行文件，不能复制开发电脑上的 x86_64 程序；4GB 内存使用 `JOBS=1` 单任务编译：
 
 ```bash
-./scripts/build.sh -- -DAIM_WITH_REALSENSE=OFF -DAIM_WITH_ROS2=OFF -DAIM_WITH_MAVLINK=OFF
+JOBS=1 ./scripts/build.sh -- -DAIM_WITH_REALSENSE=OFF -DAIM_WITH_ROS2=OFF -DAIM_WITH_MAVLINK=OFF
 /usr/bin/python3 -c 'import pymavlink, yaml'
 /usr/bin/python3 -m px4_go.yaw_follow --config /实际绝对路径/no_demo/deploy/rk3588/yaw_follow.json --check-config
 ```

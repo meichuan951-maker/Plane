@@ -4,7 +4,9 @@
 #include "demo_aim/input.hpp"
 #include "support/assertions.hpp"
 #include "support/runner.hpp"
+#include <algorithm>
 #include <cmath>
+#include <random>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -121,6 +123,78 @@ int main(int argc, char **argv) {
     f.depth_m(cv::Rect(46, 36, 4, 8)).setTo(1);
     Pipeline p(instant());
     check(p.process(f, {detection()}, 1.01).reason == "inconsistent_depth");
+  });
+  // 用全排序统计量核对选择算法，覆盖奇偶样本、重复值、空洞和非连续 ROI。
+  test("depth_statistics_match_sorted_reference", [] {
+    std::mt19937 rng(42);
+    auto c = instant();
+    c.depth_roi_fraction = 1;
+    c.depth_min_samples = 1;
+    c.depth_min_valid_ratio = .1;
+    const auto sortedMedian = [](std::vector<double> values) {
+      std::sort(values.begin(), values.end());
+      const auto n = values.size();
+      return n % 2 ? values[n / 2] : (values[n / 2 - 1] + values[n / 2]) / 2;
+    };
+    for (int trial = 0; trial < 160; ++trial) {
+      const int width = 3 + trial % 13, height = 3 + trial % 7;
+      cv::Mat storage(height + 2, width + 4, CV_32F, cv::Scalar(0));
+      auto image = storage(cv::Rect(1, 1, width, height));
+      std::vector<double> values;
+      for (int y = 0; y < height; ++y)
+        for (int x = 0; x < width; ++x) {
+          const unsigned sample = rng() % 100;
+          const float value = sample < 8 ? NAN
+                              : sample < 13 ? 0.f
+                              : sample < 18 ? 2.8f
+                              : 2.f + (static_cast<int>(rng() % 17) - 8) * .002f;
+          image.at<float>(y, x) = value;
+          if (std::isfinite(value) && value >= c.depth_min_m && value <= c.depth_max_m)
+            values.push_back(value);
+        }
+      const auto result = estimateDepth(image, {0, 0, double(width), double(height)}, c);
+      near(result.valid_ratio, double(values.size()) / (width * height));
+      const double z = sortedMedian(values);
+      std::vector<double> deviations, inliers;
+      for (double v : values)
+        deviations.push_back(std::abs(v - z));
+      const double mad = sortedMedian(deviations);
+      check(result.mad.has_value());
+      near(*result.mad, mad);
+      for (double v : values)
+        if (std::abs(v - z) <= std::max(3 * mad, c.depth_max_mad_m))
+          inliers.push_back(v);
+      if (mad > c.depth_max_mad_m)
+        check(!result.depth && result.reason == "inconsistent_depth");
+      else if (double(inliers.size()) / values.size() < .8)
+        check(!result.depth && result.reason == "mixed_depth_layers");
+      else {
+        check(result.depth && result.reason == "ok");
+        near(*result.depth, sortedMedian(inliers));
+      }
+    }
+  });
+  test("invalid_intrinsics_keep_2d_without_metric_output", [] {
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const double inf = std::numeric_limits<double>::infinity();
+    for (const auto &k : std::vector<Intrinsics>{
+             {}, {0, 80, 100, 100, 50, 40}, {100, 80, -1, 100, 50, 40},
+             {100, 80, nan, 100, 50, 40}, {100, 80, 100, inf, 50, 40},
+             {100, 80, 100, 100, nan, 40}, {100, 80, 100, 100, 50, inf}}) {
+      check(!k.isValid());
+      expectThrows([&] { k.validate(); });
+      auto f = frame();
+      f.intrinsics = k;
+      Pipeline p(instant());
+      const auto s = p.process(f, {detection()}, 1.01);
+      check(s.detection_valid && !s.position_valid && !s.bearing_valid &&
+            !s.point_camera && s.reason == "intrinsics_unavailable_or_invalid");
+    }
+    auto f = frame();
+    check(f.intrinsics.isValid());
+    f.intrinsics.width += 1;
+    Pipeline p(instant());
+    check(p.process(f, {detection()}, 1.01).reason == "intrinsics_unavailable_or_invalid");
   });
   // 验证过期、未来及非有限时间不会产生有效观测。
   test("stale_future_and_nonfinite_time", [] {

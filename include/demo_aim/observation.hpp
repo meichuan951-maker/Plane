@@ -37,6 +37,7 @@ struct Detection {
 struct Intrinsics {
   int width{}, height{};
   double fx{}, fy{}, cx{}, cy{};
+  bool isValid() const noexcept;
   void validate() const;
   cv::Vec3d deproject(double u, double v, double z) const;
 };

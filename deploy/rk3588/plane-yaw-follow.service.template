@@ -1,5 +1,5 @@
 [Unit]
-Description=RK3588 visual yaw follow with PX4
+Description=Taishan RK3566 visual yaw follow with PX4
 After=local-fs.target
 RequiresMountsFor=@PROJECT_DIR@ @CONFIG_PATH@
 

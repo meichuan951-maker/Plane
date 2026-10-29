@@ -44,9 +44,6 @@ bool CameraControls::openDevice(const std::string &path) {
   fd = ::open(path.c_str(), O_RDWR);
   if (fd < 0)
     return false;
-  int ignored = 0;
-  has_exposure =
-      query(V4L2_CID_EXPOSURE_ABSOLUTE, exposure_min, exposure_max, ignored);
   has_focus = query(V4L2_CID_FOCUS_ABSOLUTE, focus_min, focus_max, focus_value);
   int auto_min = 0, auto_max = 0, auto_value = 0;
   has_auto_focus = query(V4L2_CID_FOCUS_AUTO, auto_min, auto_max, auto_value);
@@ -55,29 +52,7 @@ bool CameraControls::openDevice(const std::string &path) {
   else if (has_focus)
     focus_status = "manual";
   has_gain = query(V4L2_CID_GAIN, gain_min, gain_max, gain_value);
-  return has_exposure || has_focus || has_gain;
-}
-void CameraControls::applyPreviewDefaults() {
-  // YLR4K 切到手动快门后几帧就会全黑，预览必须停在自动曝光。
-  useAutoExposure();
-  if (has_gain)
-    setGain(std::min(8, gain_max));
-  // 数字锐度只能加重已有边缘。这颗镜头的 focus_absolute 从 0 到 289
-  // 画面几乎不变，光学模糊要靠镜头环或把目标放到最近对焦距离之外。
-  int sharp_min = 0, sharp_max = 0, sharp = 0;
-  if (query(V4L2_CID_SHARPNESS, sharp_min, sharp_max, sharp)) {
-    const int target = std::clamp(80, sharp_min, sharp_max);
-    if (!set(V4L2_CID_SHARPNESS, target))
-      std::cerr << "Warning: camera rejected sharpness\n";
-  }
-  if (has_auto_focus)
-    setAutoFocus(true);
-  std::cerr << "Preview defaults: auto exposure, gain " << gain_value
-            << ", sharpness 80, focus " << focus_status << '\n';
-}
-void CameraControls::useAutoExposure() {
-  if (has_exposure && !set(V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_AUTO))
-    std::cerr << "Warning: camera rejected auto exposure\n";
+  return has_focus || has_auto_focus || has_gain;
 }
 bool CameraControls::setAutoFocus(bool enabled) {
   if (!has_auto_focus) {
@@ -97,11 +72,6 @@ bool CameraControls::setAutoFocus(bool enabled) {
   }
   focus_status = enabled ? "auto" : "manual";
   return true;
-}
-bool CameraControls::pulseLongestShutter() {
-  // 冷启动时自动曝光会停在全黑。写一次最长快门后再切回自动，亮度才能稳住。
-  return has_exposure && set(V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_MANUAL) &&
-         set(V4L2_CID_EXPOSURE_ABSOLUTE, exposure_max);
 }
 bool CameraControls::setFocus(int value) {
   value = std::clamp(value, focus_min, focus_max);

@@ -53,10 +53,10 @@ class VideoWorkerTest(unittest.TestCase):
     def tearDownClass(cls):
         cls.temp.cleanup()
 
-    def start(self):
+    def start(self, width=128, height=96):
         process = subprocess.Popen([
             str(WORKER), "--mode", "traditional", "--video", str(self.video),
-            "--width", "128", "--height", "96", "--fps", "30", "--threads", "2",
+            "--width", str(width), "--height", str(height), "--fps", "30", "--threads", "2",
             "--armor-config", str(ROOT / "config/armor_auto.yaml"),
             "--benchmark-worker"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, text=True, bufsize=1)
@@ -97,6 +97,25 @@ class VideoWorkerTest(unittest.TestCase):
         process.stdin.flush()
         _, error = process.communicate(timeout=5)
         self.assertEqual(process.returncode, 0, error)
+
+    def test_resizes_frames_across_eof(self):
+        for width, height in ((64, 48), (256, 192)):
+            with self.subTest(width=width, height=height):
+                process = self.start(width, height)
+                ready = json_line(process)
+                self.assertEqual((ready["source_width"], ready["source_height"]), (128, 96))
+                process.stdin.write(json.dumps({"start_monotonic_s": time.monotonic() + .1,
+                                                "warmup_s": 0, "measure_s": .2}) + "\n")
+                process.stdin.flush()
+                result = json_line(process)
+                self.assertTrue(result["success"])
+                self.assertEqual((result["input_width"], result["input_height"]), (width, height))
+                self.assertGreater(result["measured_frames"], 1)
+                self.assertGreater(result["eof_loops"], 0)
+                process.stdin.write('{"event":"release"}\n')
+                process.stdin.flush()
+                _, error = process.communicate(timeout=5)
+                self.assertEqual(process.returncode, 0, error)
 
     def test_invalid_schedule_never_reports_success(self):
         process = self.start()

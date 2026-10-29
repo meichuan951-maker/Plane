@@ -9,13 +9,13 @@
 
 namespace aim {
 struct StreamShared;
-enum class CameraCommand : int { Focus, Gain, AutoFocus, ExposureRecovery };
+enum class CameraCommand : int { Focus, Gain, AutoFocus };
 struct StreamOptions {
   std::string device, format{"MJPG"};
-  int width{640}, height{480}, fps{30};
+  int width{640}, height{360}, fps{30};
   int frame_type{CV_8UC3}; // CV_8UC3 彩色，CV_32FC3 深度光学系 XYZ（米）。
   int graceful_stop_ms{0};
-  bool controls{true};
+  bool controls{false};
   double stall_seconds{3}, reconnect_seconds{15};
 };
 

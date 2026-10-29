@@ -19,7 +19,7 @@
 `aim_mavlink` 依赖导航和遥测缓存，应用负责装配。
 `aim_app_common` 集中编译严格整数解析与帧率统计，供相关应用和回归目标链接。
 
-`aim_camera_stream` 集中构建共享帧、进程监管与 UVC 控制；YLR4K 等 UVC RGB 程序额外链接 `aim_uvc_worker`。
+`aim_camera_stream` 集中构建共享帧、进程监管与 UVC 控制；MaixCAM Lite 的主机 UVC RGB 程序额外链接 `aim_uvc_worker`。
 内部共享内存文件描述符和流状态常量定义在
 `include/demo_aim/detail/input/uvc_stream_protocol.hpp`。
 共享时钟函数的实现位于 `src/input/uvc_stream_protocol.cpp`，由 `aim_camera_stream` 编译。

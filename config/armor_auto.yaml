@@ -1,16 +1,18 @@
-# YLR4K 普通 UVC 彩色相机。用户颜色协议：1=蓝色，2=红色；不识别装甲数字。
+# 部署平台：泰山派 RK3566，4GB 内存 + 32GB 存储，Ubuntu 22.04 ARM64。
+# 当前相机：MaixCAM Lite，经设备端 UVC 推流接入。颜色协议：1=蓝色，2=红色；不识别装甲数字。
 target_color: 1
 camera:
-  # 示例节点；先运行 camera_light_test --list，改为本机实际彩色节点或 by-id 路径。
-  device: /dev/video0
+  # 先运行 scripts/maixcam_lite_live.sh --check，填写该 MaixCAM Lite 的真实节点或稳定路径。
+  # 有意不使用 /dev/video0，防止误开笔记本内置摄像头。
+  device: /dev/v4l/by-id/REPLACE_ME_MAIXCAM_LITE
   width: 640
-  height: 480
+  height: 360
   fps: 30
   format: MJPG # 请求模式；以实际驱动协商结果为准。
 # 下列路径相对于本配置文件所在目录。
 detector_config: light_bars.yaml
-# 需用这台 YLR4K、当前分辨率重新标定；文件缺失时仅检测/跟踪，不输出 PnP 数值。
-rgb_calibration: ylr4k_rgb_calibration.yaml
+# 需用这台 MaixCAM Lite、实际输出分辨率重新标定；文件缺失时仅检测/跟踪，不输出 PnP 数值。
+rgb_calibration: maixcam_lite_rgb_calibration.yaml
 armor:
   lightbar_center_distance_m: 0.135
   lightbar_length_m: 0.056

@@ -132,6 +132,8 @@ pairLightBars(const std::vector<ColorLightBar> &bars, const LightBarConfig &c) {
         return a.bar->class_id < b.bar->class_id;
       });
   std::vector<Pair> pairs;
+  const double expected_ratio = c.armor_width_m / c.lightbar_length_m;
+  const double log_max_length_ratio = std::log(c.pair_max_length_ratio);
   for (std::size_t i = 0; i < geometry.size(); ++i) {
     const auto &l = geometry[i];
     std::multiset<float> intervening_y;
@@ -157,13 +159,20 @@ pairLightBars(const std::vector<ColorLightBar> &bars, const LightBarConfig &c) {
       const double height = (l.length + r.length) / 2;
       const double side_ratio =
           std::max(l.length, r.length) / std::min(l.length, r.length);
+      const double y_offset = std::abs(span.y) / height;
+      if (side_ratio > c.pair_max_length_ratio ||
+          y_offset > c.pair_max_y_offset)
+        continue;
       const double separation = cv::norm(span);
       const double ratio = separation / height;
-      const double y_offset = std::abs(span.y) / height;
+      if (ratio < c.pair_min_ratio || ratio > c.pair_max_ratio)
+        continue;
       const double angle =
           std::acos(
               std::clamp(static_cast<double>(l.axis.dot(r.axis)), -1.0, 1.0)) *
           180 / CV_PI;
+      if (angle > c.pair_max_angle_deg)
+        continue;
       const auto horizontal = span / static_cast<float>(separation);
       const double rectangular_error =
           std::asin(std::clamp(
@@ -171,10 +180,7 @@ pairLightBars(const std::vector<ColorLightBar> &bars, const LightBarConfig &c) {
                        std::abs(static_cast<double>(r.axis.dot(horizontal)))),
               0.0, 1.0)) *
           180 / CV_PI;
-      if (side_ratio > c.pair_max_length_ratio ||
-          y_offset > c.pair_max_y_offset || angle > c.pair_max_angle_deg ||
-          ratio < c.pair_min_ratio || ratio > c.pair_max_ratio ||
-          rectangular_error > c.pair_max_rectangular_error_deg)
+      if (rectangular_error > c.pair_max_rectangular_error_deg)
         continue;
       const double middle_y = (l.bar->rect.center.y + r.bar->rect.center.y) / 2;
       // 排序维护中间灯条的 y，范围查询替代原来的第三层全量扫描。
@@ -182,9 +188,8 @@ pairLightBars(const std::vector<ColorLightBar> &bars, const LightBarConfig &c) {
           static_cast<float>(middle_y - height * 0.5));
       if (blocked != intervening_y.end() && *blocked < middle_y + height * 0.5)
         continue;
-      const double expected_ratio = c.armor_width_m / c.lightbar_length_m;
       const double cost =
-          std::log(side_ratio) / std::log(c.pair_max_length_ratio) +
+          std::log(side_ratio) / log_max_length_ratio +
           y_offset / c.pair_max_y_offset + angle / c.pair_max_angle_deg +
           rectangular_error / c.pair_max_rectangular_error_deg +
           0.25 * std::abs(std::log(ratio / expected_ratio));

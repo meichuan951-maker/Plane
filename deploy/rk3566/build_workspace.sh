@@ -5,7 +5,7 @@ set -euo pipefail
 usage() {
     cat <<'HELP'
 用法：rk-ros2 bash /workspace/no_demo/deploy/rk3566/build_workspace.sh [--vision-only]
-  默认构建 ROS 2 包和视觉程序；--vision-only 仅更新 YLR4K/UVC 视觉程序。
+  默认构建 ROS 2 包和视觉程序；--vision-only 仅更新 MaixCAM Lite/UVC 视觉程序。
   视觉输出固定在 no_demo/build/rk3566-humble，单任务编译，不启动硬件。
 HELP
 }

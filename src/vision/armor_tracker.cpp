@@ -23,6 +23,12 @@ TrackedArmor ArmorTracker::update(const std::vector<ArmorCandidate> &candidates,
   const ArmorCandidate *best = nullptr;
   double cost = std::numeric_limits<double>::infinity();
   const int wanted = config_.target_color == 1 ? 1 : 0;
+  const double scale = previous_
+      ? std::max(16., std::hypot(double(previous_->box.width),
+                               double(previous_->box.height)))
+      : std::max(1., std::hypot(size.width, size.height));
+  const float previous_area = previous_ ? previous_->box.area() : 0.0f;
+  const cv::Point2f image_center(size.width * .5f, size.height * .5f);
   for (const auto &c : candidates) {
     if (c.class_id != wanted || !std::isfinite(c.center.x) ||
         !std::isfinite(c.center.y) || !std::isfinite(c.geometry_score) ||
@@ -34,18 +40,14 @@ TrackedArmor ArmorTracker::update(const std::vector<ArmorCandidate> &candidates,
     if (previous_) {
       const auto &p = *previous_;
       const double distance = cv::norm(c.center - p.center);
-      const double scale =
-          std::max(16., std::hypot(double(p.box.width), double(p.box.height)));
-      const double area_ratio = c.box.area() / p.box.area();
+      const double area_ratio = c.box.area() / previous_area;
       if (distance > scale * config_.association_distance_ratio ||
           area_ratio < 1 / config_.association_size_ratio ||
           area_ratio > config_.association_size_ratio)
         continue;
       value = distance / scale + .2 * std::abs(std::log(area_ratio));
     } else
-      value = cv::norm(c.center -
-                       cv::Point2f(size.width * .5f, size.height * .5f)) /
-                  std::max(1., std::hypot(size.width, size.height)) -
+      value = cv::norm(c.center - image_center) / scale -
               .05 * c.geometry_score;
     if (value < cost) {
       cost = value;

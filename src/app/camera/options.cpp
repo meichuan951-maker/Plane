@@ -14,12 +14,14 @@ void help() {
          "  --list                        List Linux video nodes; does not "
          "open cameras\n"
          "  --config config/light_bars.yaml\n"
-         "  --width 640 --height 480 --fps 30 --format MJPG|YUYV\n"
+         "  --width 640 --height 360 --fps 30 --format MJPG|YUYV\n"
          "  --frames N                    Stop after N frames; 0=until "
          "q/Esc/Ctrl+C\n"
          "  --no-show                     Headless, no windows\n"
-         "  --no-controls                 Preview without exposure/focus/gain "
-         "queries or writes\n"
+         "  --controls                    Opt in to supported UVC focus/gain "
+         "controls\n"
+         "  --no-controls                 Skip UVC controls (default for "
+         "MaixCAM Lite)\n"
          "  --reconnect-seconds N         Retry budget after stream failure; "
          "default 15, 0=exit\n"
          "  --mask                        Show color masks and threshold "
@@ -28,17 +30,16 @@ void help() {
          "raw/overlay/masks/thresholds at exit\n"
          "  --image FILE                  Process a still image instead of a "
          "camera\n"
-         "Keys: q/Esc exit, f scans focus, a enables camera autofocus, "
-         "e attempts dark-frame exposure recovery, "
+         "Keys: q/Esc exit; with --controls, f scans focus and a enables "
+         "camera autofocus; "
          "s saves snapshot under "
          "runs/camera_snapshots/\n"
-         "Startup applies supported preview defaults without scanning focus. "
-         "Press f "
-         "with the armor in frame; Focus and Gain sliders are camera units.\n"
+         "MaixCAM Lite imaging parameters are configured on the device "
+         "with MaixPy. UVC control discovery is off by default; --controls "
+         "queries supported controls without changing startup values.\n"
          "Capture/control run in a supervised worker process; the preview "
          "stays "
-         "responsive during a stalled driver. Press e only when the frame is "
-         "dark.\n"
+         "responsive during a stalled driver.\n"
          "Focus writes are read back from the driver; this does not verify "
          "physical lens movement. Scans wait for settling at each position.\n"
          "Same-color light bars are drawn as an armor quadrilateral. "
@@ -79,6 +80,10 @@ Options parse(int argc, char **argv) {
     }
     if (key == "--no-controls") {
       o.controls = false;
+      continue;
+    }
+    if (key == "--controls") {
+      o.controls = true;
       continue;
     }
     if (i + 1 >= argc)

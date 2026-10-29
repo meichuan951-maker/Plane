@@ -1,14 +1,15 @@
-# YLR4K 普通 UVC 彩色相机示例；设备路径、格式和曝光须在目标板核验。
+# 当前目标：泰山派 RK3566，4GB 内存 + 32GB 存储，Ubuntu 22.04 ARM64。
+# MaixCAM Lite 的 UVC 彩色流示例；先在设备端启用 UVC 并运行推流程序。
 target_color: 1 # 1=蓝色，2=红色。
 camera:
-  device: /dev/v4l/by-id/REPLACE_ME_YLR4K
+  device: /dev/v4l/by-id/REPLACE_ME_MAIXCAM_LITE
   width: 640
-  height: 480
+  height: 360
   fps: 30
-  format: MJPG # 仅在相机支持该模式时使用；否则核验后改为 YUYV。
+  format: MJPG # 与 MaixCAM Lite 设备端的 UVC 推流模式一致；实际模式须枚举核验。
 detector_config: ../../config/light_bars.yaml
 # 此文件有意不存在。没有本机标定时只做像素跟踪，不报告米制距离/角度。
-rgb_calibration: ylr4k_rgb_calibration.yaml
+rgb_calibration: maixcam_lite_rgb_calibration.yaml
 armor:
   lightbar_center_distance_m: 0.135
   lightbar_length_m: 0.056

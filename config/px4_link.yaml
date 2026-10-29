@@ -1,5 +1,6 @@
-# 已确认拓扑：MicoVIO -> PX4 EKF2 -> 此串口 -> Orange Pi。
-# 本配置仅针对 PX4 与香橙派之间的链路，MicoVIO 另接飞控的其他接口。
+# 已确认拓扑：MicoVIO -> PX4 EKF2 -> 此串口 -> 泰山派 RK3566。
+# 板端系统：Ubuntu 22.04 ARM64；硬件容量：4GB 内存 + 32GB 存储。
+# 本配置仅针对 PX4 与泰山派之间的链路，MicoVIO 另接飞控的其他接口。
 device: /dev/ttyS?  # 必须替换为实际接口；占位符会被拒绝
 baud: 921600       # 此端与 PX4 的对应 MAVLink 实例保持一致
 system_id: 1

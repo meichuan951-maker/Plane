@@ -146,22 +146,23 @@ public:
     backend_ = capture_.getBackendName();
   }
   cv::Mat next() {
-    cv::Mat raw;
-    if (!capture_.read(raw) || raw.empty()) {
+    if (!capture_.read(raw_) || raw_.empty()) {
       capture_.release();
       open();
-      if (!capture_.read(raw) || raw.empty())
+      if (!capture_.read(raw_) || raw_.empty())
         throw std::runtime_error("Video has no decodable frame after one reopen");
       ++loops_;
     }
-    if (raw.type() != CV_8UC3)
+    if (raw_.type() != CV_8UC3)
       throw std::runtime_error("Video decoder did not produce BGR8 frames");
-    if (source_size_.empty()) source_size_ = raw.size();
-    if (raw.size() != source_size_)
+    if (source_size_.empty()) source_size_ = raw_.size();
+    if (raw_.size() != source_size_)
       throw std::runtime_error("Video frame dimensions changed mid-stream");
-    cv::Mat resized;
-    cv::resize(raw, resized, size_, 0, 0, cv::INTER_LINEAR);
-    return resized;
+    // Each frame is processed before next() is called again, so reuse the
+    // decoder/resize buffers and avoid copying already matching frames.
+    if (raw_.size() == size_) return raw_;
+    cv::resize(raw_, resized_, size_, 0, 0, cv::INTER_LINEAR);
+    return resized_;
   }
   Json metadata() const {
     return {{"source_width", source_size_.width}, {"source_height", source_size_.height},
@@ -176,6 +177,7 @@ private:
   std::string path_, backend_;
   cv::Size size_, source_size_;
   cv::VideoCapture capture_;
+  cv::Mat raw_, resized_;
   Json fps_;
   std::uint64_t loops_{};
 };

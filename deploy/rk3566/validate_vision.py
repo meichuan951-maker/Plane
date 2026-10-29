@@ -224,7 +224,7 @@ def main():
         "ros_nodes_started": False,
         "limits": [
             "Camera device, resolution, FPS and format are configuration requests; no driver negotiation was tested.",
-            "Three injected demo frames test confirmation logic, not YLR4K video or model accuracy.",
+            "Three injected demo frames test confirmation logic, not MaixCAM Lite capture or real-scene accuracy.",
             "One generated light-bar image tests detection; continuous tracking and calibrated PnP accuracy were not validated.",
             "Missing calibration must leave metric pose fields null; this check does not create calibration data.",
             "No real camera, serial port, ROS publisher/control node, ADB or SSH connection is started.",

@@ -1,5 +1,5 @@
 # OpenCV HSV：H=0..179，S/V=0..255。红色横跨色相首尾。
-# 起始参数适合 640x480；现场按真实灯条、曝光、白平衡调整。
+# 通用起始参数；MaixCAM Lite 640x360 需按真实灯条、曝光和白平衡现场调整。
 min_saturation: 80
 min_value: 160
 red_hue_low_max: 12
@@ -29,6 +29,6 @@ armor_width_m: 0.135
 lightbar_length_m: 0.056
 # 填入这台 USB 相机自己的标定后才会显示 yaw/pitch。不要抄海康相机的 camera_matrix。
 # camera_width: 640
-# camera_height: 480
+# camera_height: 360
 # camera_matrix: [fx, 0, cx, 0, fy, cy, 0, 0, 1]
 # distort_coeffs: [0, 0, 0, 0, 0]

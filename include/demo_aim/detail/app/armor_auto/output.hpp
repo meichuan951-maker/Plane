@@ -21,7 +21,7 @@ struct FrameContext {
 struct FrameStatus {
   bool current{false};
   bool valid{false};
-  std::string reason;
+  const char *reason{""};
 };
 
 // JSON and preview use the same gates and never trust cached pose validity

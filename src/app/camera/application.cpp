@@ -97,8 +97,9 @@ int run(int argc, char **argv) {
       settings.controls = o.show && o.controls;
       settings.reconnect_seconds = o.reconnect_seconds;
       camera = std::make_unique<aim::CameraStream>(settings);
-      std::cout << "Preview starts without exposure waits or focus scans; f "
-                   "scans, a enables AF, e recovers a dark frame.\n";
+      std::cout << (settings.controls
+                        ? "Optional UVC focus/gain controls enabled; f scans focus, a enables AF.\n"
+                        : "UVC controls disabled; configure MaixCAM Lite imaging with MaixPy on the device.\n");
     }
     CameraControls controls; // 只存子进程读回的状态，不在主进程打开设备。
     FocusScan scan;
@@ -261,7 +262,7 @@ int run(int argc, char **argv) {
               camera_line << controls.focus_value << ' '
                           << controls.focus_status;
             camera_line << " | gain " << controls.gain_value
-                        << " | f scan/a AF/e exposure";
+                        << " | f scan/a AF";
           }
           if (scan.active())
             camera_line << " | " << scan.label();
@@ -299,13 +300,11 @@ int run(int argc, char **argv) {
              overlay, result, config,
              camera && camera->controlsReady() ? &controls : nullptr);
       }
-      if (camera && key == 'f')
+      if (camera && o.controls && key == 'f')
         scan.start(*camera, controls);
-      if (camera && (key == 'a' || key == 'e')) {
+      if (camera && o.controls && key == 'a') {
         scan.cancel();
-        camera->command(key == 'a' ? aim::CameraCommand::AutoFocus
-                                   : aim::CameraCommand::ExposureRecovery,
-                        1);
+        camera->command(aim::CameraCommand::AutoFocus, 1);
       }
       if (key == 'q' || key == 27 || (!camera && !o.show))
         break;

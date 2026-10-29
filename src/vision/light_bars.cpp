@@ -103,17 +103,21 @@ LightBarResult detectLightBars(const cv::Mat &bgr, const LightBarConfig &c) {
   if (!result.armors.empty()) {
     const cv::Point2f mid(bgr.cols * 0.5f, bgr.rows * 0.5f);
     std::size_t closest = 0;
+    double closest_distance = cv::norm(result.armors[0].center - mid);
     for (std::size_t i = 1; i < result.armors.size(); ++i) {
       const double di = cv::norm(result.armors[i].center - mid);
-      const double dc = cv::norm(result.armors[closest].center - mid);
-      if (di + 1e-3 < dc ||
-          (std::abs(di - dc) <= 1e-3 &&
-           result.armors[i].center.x < result.armors[closest].center.x))
+      if (di + 1e-3 < closest_distance ||
+          (std::abs(di - closest_distance) <= 1e-3 &&
+           result.armors[i].center.x < result.armors[closest].center.x)) {
         closest = i;
+        closest_distance = di;
+      }
     }
     for (std::size_t i = 0; i < result.armors.size(); ++i) {
       auto &armor = result.armors[i];
       armor.reported = i == closest;
+      if (!c.has_camera)
+        continue;
       if (const auto pose = solveArmorPose(armor.corners, c, bgr.size())) {
         armor.pose_valid = true;
         armor.yaw_deg = pose->yaw_deg;

@@ -21,7 +21,7 @@ namespace {
 using Clock = std::chrono::steady_clock;
 using test_support::check;
 // 独立的驱动替身进程：通过与真实驱动相同的 IPC 发布帧，也可故意永远卡住。
-int fixture(const std::string &mode) {
+int fixture(const std::string &mode, bool controls_enabled) {
   prctl(PR_SET_PDEATHSIG, SIGKILL);
   if (getppid() == 1)
     return 2;
@@ -100,7 +100,7 @@ int fixture(const std::string &mode) {
     shared->acknowledged = ack;
     shared->command_ok = 1;
     auto &state = shared->controls;
-    state.available = state.has_focus = 1;
+    state.available = state.has_focus = controls_enabled ? 1 : 0;
     state.focus_min = 0;
     state.focus_max = 16;
     state.focus_value = focus;
@@ -115,6 +115,7 @@ aim::StreamOptions settings(const std::string &mode, double retries = 0) {
   aim::StreamOptions options;
   options.device = mode;
   options.width = options.height = 64;
+  options.controls = true; // Explicit opt-in for the focus/control fixtures.
   options.stall_seconds = 0.5;
   options.reconnect_seconds = retries;
   return options;
@@ -154,10 +155,22 @@ void until(aim::CameraStream &stream, cv::Mat &frame,
 
 int main(int argc, char **argv) {
   if (argc > 1 && std::string(argv[1]) == "--camera-worker")
-    return fixture(argv[2]);
+    return fixture(argv[2], std::string(argv[7]) == "1");
   try {
     cv::Mat frame;
     aim::CameraControls controls;
+    {
+      auto s = settings("live");
+      s.controls = false;
+      aim::CameraStream stream(s);
+      until(stream, frame, controls, 2,
+            [](auto r) { return r == aim::CameraStream::Result::Frame; });
+      check(!stream.controlsReady() && !controls.has_focus &&
+                stream.command(aim::CameraCommand::Focus, 12) == 0,
+            "control-free capture must produce frames without enabling commands");
+      until(stream, frame, controls, 1,
+            [](auto r) { return r == aim::CameraStream::Result::Frame; });
+    }
     {
       auto s = settings("depth");
       s.frame_type = CV_32FC3;

@@ -14,7 +14,7 @@
   [json_log.cpp](json_log.cpp) 写 JSONL，默认每份最多 10 MiB、保留当前文件及 4 份历史，使用同路径排他锁；
   [ros_output.cpp](ros_output.cpp) 提供可选 ROS 2 JSON 发布。日志轮转不影响 `armor_auto` 的独立追加输出。
 - [camera_light_test.cpp](camera_light_test.cpp) → [camera/application.cpp](camera/application.cpp)：
-  `camera_light_test`。普通 UVC 预览、红蓝灯条/装甲候选、阈值调整、相机控制和截图的入口。
+  `camera_light_test`。MaixCAM Lite 的 UVC 预览、红蓝灯条/装甲候选、阈值调整和截图入口；默认跳过主机相机控制，通用 UVC 对焦/增益控制可用 `--controls` 显式启用。
 - [armor_auto_main.cpp](armor_auto_main.cpp) → [armor_auto/application.cpp](armor_auto/application.cpp)：
   `armor_auto`。读取相机或单张图片，检测、选择和确认目标，输出跟踪与 PnP 测量；
   `--calibrate` 转入 [armor_calibrate.cpp](armor_calibrate.cpp) 的棋盘格采集与标定流程。
@@ -49,12 +49,12 @@
   [config/light_bars.yaml](../../config/light_bars.yaml) 配置灯条测试；
   [config/armor_auto.yaml](../../config/armor_auto.yaml) 配置自动装甲与标定路径；
   [config/px4_link.yaml](../../config/px4_link.yaml) 配置定位通信。
-- [scripts/ylr4k_live.sh](../../scripts/ylr4k_live.sh) 启动相机测试，
+- [tools/maixcam/run_light_test.py](../../tools/maixcam/run_light_test.py) 按 MaixCAM Lite 的 USB 身份查找视频节点并启动相机测试，
   [scripts/armor_auto.sh](../../scripts/armor_auto.sh) 启动自动装甲/标定；
   二者使用根目录 `build/` 下的可执行程序。
 - [px4_go/yaw_follow.py](../../px4_go/yaw_follow.py) 启动无窗口 `armor_auto` 子进程并读取它的 JSON。
   Python 入口独立管理飞控连接，C++ `armor_auto` 自身只提供视觉结果；
-  板端配置和自启动说明见 [deploy/rk3588](../../deploy/rk3588/README.md)。
+  板端配置和自启动说明见 [泰山派 RK3566 部署](../../deploy/rk3588/README.md)。
 - [test/app](../../test/app/) 验证输出有效性、截图一致性和可选定位 CLI；
   [test/input](../../test/input/) 覆盖相机监管/控制及相关预览逻辑。
   构建与测试登记分别见 [根 CMakeLists.txt](../../CMakeLists.txt) 和

@@ -1,6 +1,6 @@
 # 测量与相机诊断工具
 
-本目录存放开发阶段的辅助工具：测量传统视觉的资源开销、测试视觉和离线电控的并行负载，以及诊断 YLR4K 的 UVC 帧率协商。
+本目录存放开发阶段的辅助工具：测量传统视觉的资源开销、测试视觉和离线电控的并行负载，以及 MaixCAM Lite 的采集、预览和 UVC 接入。
 业务视觉算法来自 [src/vision/](../src/vision/README.md)，这些工具负责组织输入、采样和报告。
 普通相机预览及装甲识别入口在 [src/app/](../src/app/README.md)，日常启动脚本在 [scripts/](../scripts/)。
 
@@ -11,7 +11,7 @@
 - [vision_video_worker.cpp](vision_video_worker.cpp)：流式读取录像的 C++ 视觉工作进程，使用传统灯条/装甲识别；实现 ready / 共同测量窗口 / result / release 协议，供联测父进程调度。传统录像模式禁用 PnP，避免使用与录像相机不匹配的内参。
 - [benchmark_vision_control.py](benchmark_vision_control.py)：父进程调度器，分别测量控制单独、传统视觉单独和二者联合运行的三种场景；启动视觉 worker 和 `px4_go.offline_control`，统一预热和测量窗口，生成 JSON、CSV 与 `.cases/` 日志。
 - [resource_sampling.py](resource_sampling.py)：供联测调度器使用的 Linux `/proc` 采样模块，统计进程树 CPU、PSS/RSS/SwapPss 和采样峰值；本身不是业务运行入口。
-- [probe_ylr4k_60fps.py](probe_ylr4k_60fps.py)：针对 `27c4:0531` YLR4K 的 UVC PROBE 诊断。默认只检查设备描述符并输出计划；显式 `--apply` 才临时解绑驱动、发送标准 PROBE 并尝试恢复。它不 COMMIT 视频流、不采集图像；协商返回 60 FPS 不能证明实际采集达到 60 FPS。
+- [maixcam/](maixcam/README.md)：MaixCAM Lite 设备端的 MaixVision 预览、灯条/装甲候选检测、UVC 配置与推流，以及电脑端按设备身份选择 UVC 节点的启动器。设备端脚本通过 MaixVision 运行，电脑端启动器复用 `build/camera_light_test`。
 
 `__pycache__/` 是 Python 自动生成的缓存，不保存工具源码或实验结论。
 
@@ -62,4 +62,4 @@ python3 tools/benchmark_vision_memory.py profile --duration 60 \
 
 该命令会实际打开配置中的相机；测试前应确认采集入口能正常工作。资源数据只代表本次机器和所选负载，算法进程峰值、采样峰值和整机内存需求需分别解读。
 `compare` 保留命令名，每轮只测传统视觉；C++ 探针与录像 worker 默认使用传统模式，可显式传 `--mode traditional`。
-联测默认运行 `control_only`、`traditional_only`、`traditional_joint` 三种场景；更多参数见工具 `--help`，UVC 诊断的设备操作边界见 `probe_ylr4k_60fps.py`。
+联测默认运行 `control_only`、`traditional_only`、`traditional_joint` 三种场景；更多参数见工具 `--help`；MaixCAM Lite 的设备端与主机端步骤见 [相机接入说明](maixcam/README.md)。
